@@ -11,7 +11,7 @@ await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
-const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));const glass=g.assets.car.getObjectByName('FrontWindow');return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver'))}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
+const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[],canopyCaps=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));g.station.traverse(o=>{if(o.isMesh&&o.name.startsWith('CanopyLight')&&o.visible)canopyCaps.push(o.name)});const glass=g.assets.car.getObjectByName('FrontWindow');return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver')),bothCanopyCaps:canopyCaps.length===2}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
 const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
   const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   const hold=(done,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!done();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return done()};
@@ -21,12 +21,12 @@ const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
     g.spawnCar();const car=g.cars[0];
     if(!car){out.push({index,parked:false});continue}
     for(let i=0;i<900&&car.status==='entering';i++)g.updateCars(.05);
-    const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup'),pickupSpot=pickup&&findSpot(pickup);let tookHose=false,hoseShown=false,fuelSpot=null,paid=0,fuelingSeen=false,hoseReturned=false;
-    if(pickupSpot){g.player.position.set(pickupSpot.x,.26,pickupSpot.z);g.updateInteraction(0);tookHose=hold(()=>g.carry==='hose');g.hands.update(.05,{moving:true,acting:true,yawDelta:.04,pitchDelta:-.02});g.updateFuelHoseVisual();const socket=g.hands.getHoseSocketNDC(g.hoseSocketNdc,g.camera.aspect),end=g.hosePoints.at(-1).clone().project(g.camera),screenGap=socket&&Math.hypot(socket.x-end.x,socket.y-end.y);hoseShown=tookHose&&screenGap<.0001&&g.hands.current==='hose'&&g.hoseWorld.visible&&g.hoseWorld.userData.minHeight>.8&&g.hoseSegments.length===6&&g.hoseSegments.every(s=>Number.isFinite(s.scale.y)&&s.scale.y>.01)&&car.pump.hoseParts.length>0&&car.pump.hoseParts.every(o=>!o.visible)}
+    const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup'),pickupSpot=pickup&&findSpot(pickup);let tookHose=false,hoseShown=false,hoseCheck=null,fuelSpot=null,paid=0,fuelingSeen=false,hoseReturned=false;
+    if(pickupSpot){g.player.position.set(pickupSpot.x,.26,pickupSpot.z);g.updatePlayer(0);g.updateInteraction(0);tookHose=hold(()=>g.carry==='hose');g.hands.update(.05,{moving:true,acting:true,yawDelta:.04,pitchDelta:-.02});g.updateFuelHoseVisual();const socket=g.hands.getHoseSocketNDC(g.hoseSocketNdc,g.camera.aspect),end=g.hosePoints.at(-1).clone().project(g.camera),screenGap=socket&&Math.hypot(socket.x-end.x,socket.y-end.y);hoseCheck={tookHose,attached:screenGap<.0001,inHand:g.hands.current==='hose',worldVisible:g.hoseWorld.visible,aboveFloor:g.hoseWorld.userData.minHeight>.8,segments:g.hoseSegments.length===6&&g.hoseSegments.every(s=>Number.isFinite(s.scale.y)&&s.scale.y>.01),pumpHidden:car.pump.hoseParts.length>0&&car.pump.hoseParts.every(o=>!o.visible)};hoseShown=Object.values(hoseCheck).every(Boolean)}
     const fuel=g.jobs.find(j=>j.car===car&&j.kind==='fuel');fuelSpot=fuel&&findSpot(fuel);
     if(fuelSpot){const before=g.state.money;g.player.position.set(fuelSpot.x,.26,fuelSpot.z);g.updateInteraction(0);hold(()=>{fuelingSeen||=car.status==='fueling';paid=g.state.money-before;return paid>0});hoseReturned=g.carry===null&&!g.fuelHose&&car.pump.hoseParts.every(o=>o.visible)}
     const probes=[-6.2,-6.1,-8.6,-8.7].map(z=>({z,blocked:g.isBlocked(car.pump.x,z),distance:Math.hypot(car.spot.x-car.pump.x,car.spot.z-z)}));
-    out.push({index,state:car.status,phase:car.phase,parked:car.status!=='entering',pickupReachable:!!pickupSpot,tookHose,hoseShown,fuelReachable:!!fuelSpot,fuelingSeen,paid:paid>0,hoseReturned,spot:{x:car.spot.x,z:car.spot.z},carAt:{x:car.group.position.x,z:car.group.position.z,yaw:car.group.rotation.y},probes});
+    out.push({index,state:car.status,phase:car.phase,parked:car.status!=='entering',pickupReachable:!!pickupSpot,tookHose,hoseShown,hoseCheck,fuelReachable:!!fuelSpot,fuelingSeen,paid:paid>0,hoseReturned,spot:{x:car.spot.x,z:car.spot.z},carAt:{x:car.group.position.x,z:car.group.position.z,yaw:car.group.rotation.y},probes});
   }
   g.pumps.forEach(p=>{p.car=null});return out;});
 if(service.some(r=>!r.parked||!r.pickupReachable||!r.tookHose||!r.hoseShown||!r.fuelReachable||!r.fuelingSeen||!r.paid||!r.hoseReturned))throw new Error(`Two-step refuelling failed: ${JSON.stringify(service)}`);
@@ -93,6 +93,7 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   g.spawnSpill();
   const spill=g.jobs.find(j=>j.tag==='spill');
   out.spillNeedsMop=!!spill&&spill.need==='mop';
+  out.spillVisible=spill.visual?.children.length===5&&spill.visual.position.y>.24&&spill.visual.children.every(m=>m.visible&&m.material.opacity>.6);
   goTo(spill.pos());
   out.blockedWithoutMop=!hold(()=>!g.jobs.includes(spill),40);
   goTo({x:-3.7,z:-3.25});
@@ -101,6 +102,16 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   goTo(spill.pos());
   out.cleaned=hold(()=>!g.jobs.includes(spill));
   out.mopIsBack=g.carry===null&&g.kitMop.every(m=>m.visible);
+  g.eventBlackout();
+  const panel=g.jobs.find(j=>j.tag==='blackout');
+  out.panelNeedsTools=!!panel&&panel.need==='tools';
+  goTo(panel.pos());
+  out.panelBlockedWithoutTools=!hold(()=>!g.jobs.includes(panel),40)&&g.blackout;
+  goTo({x:-4.28,z:-.45});
+  out.tookToolsForPanel=hold(()=>g.carry==='tools');
+  goTo(panel.pos());
+  out.panelRepaired=hold(()=>!g.jobs.includes(panel))&&!g.blackout;
+  out.panelToolsReturned=g.carry===null;
   g.pumps.forEach(p=>{p.car=null;p.broken=false});
   g.eventBrokenPump();
   const repair=g.jobs.find(j=>j.tag==='broken');
@@ -132,4 +143,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: visible drivers, two-step hose refuelling, deadlock-free traffic, items in hands, guide and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: both canopy caps, visible coffee spill, tool-gated repairs, hose refuelling, traffic, guide and desktop/mobile UI are working.');await browser.close();
