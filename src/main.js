@@ -59,7 +59,7 @@ class NightStationGame{
     for(const s of[-1,1]){const clip=new THREE.Mesh(new THREE.BoxGeometry(.04,.08,.02),steelMat);clip.position.set(s*.16,.24,-.18);toolbox.add(clip)}
     this.toolbox=toolbox;this.scene.add(toolbox);
     this.marker=new THREE.Group();const ring=new THREE.Mesh(new THREE.TorusGeometry(.68,.055,7,24),new THREE.MeshBasicMaterial({color:0xffad32,transparent:true,opacity:.9,depthWrite:false}));ring.rotation.x=Math.PI/2;this.marker.add(ring);const beam=new THREE.Mesh(new THREE.CylinderGeometry(.04,.45,1.6,8,1,true),new THREE.MeshBasicMaterial({color:0xffad32,transparent:true,opacity:.13,side:THREE.DoubleSide,depthWrite:false}));beam.position.y=.8;this.marker.add(beam);this.marker.visible=false;this.scene.add(this.marker);
-    this.hoseWorld=new THREE.Group();const hoseGeo=new THREE.CylinderGeometry(.035,.035,1,7),hoseMat=new THREE.MeshStandardMaterial({color:0x101416,roughness:.96});this.hoseSegments=[new THREE.Mesh(hoseGeo,hoseMat),new THREE.Mesh(hoseGeo,hoseMat)];this.hoseSegments.forEach(s=>this.hoseWorld.add(s));this.hoseWorld.visible=false;this.scene.add(this.hoseWorld);
+    this.hoseWorld=new THREE.Group();const hoseGeo=new THREE.CylinderGeometry(.035,.035,1,7),hoseMat=new THREE.MeshStandardMaterial({color:0x101416,roughness:.96});this.hoseSegments=Array.from({length:6},()=>new THREE.Mesh(hoseGeo,hoseMat));this.hosePoints=Array.from({length:7},()=>new THREE.Vector3());this.hoseControl=new THREE.Vector3();this.hoseDirection=new THREE.Vector3();this.hoseUp=new THREE.Vector3(0,1,0);this.hoseSegments.forEach(s=>this.hoseWorld.add(s));this.hoseWorld.visible=false;this.scene.add(this.hoseWorld);
   }
   async load(){
     const loader=new GLTFLoader(),files=['station','pump','car','mystery_van','worker','bag','cleaning_kit'];let done=0;
@@ -131,11 +131,14 @@ class NightStationGame{
     if(len>.05){strafe/=Math.max(1,len);forward/=Math.max(1,len);const run=this.keys.ShiftLeft||this.keys.ShiftRight?1.55:1,speed=(4.35+this.state.upgrades.speed*.52)*run,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rx=Math.cos(this.yaw),rz=-Math.sin(this.yaw),dx=(rx*strafe+fx*forward)*speed*dt,dz=(rz*strafe+fz*forward)*speed*dt;const nextX=this.player.position.x+dx,nextZ=this.player.position.z+dz,stuck=this.isBlocked(this.player.position.x,this.player.position.z);if(stuck||!this.isBlocked(nextX,this.player.position.z))this.player.position.x=nextX;if(stuck||!this.isBlocked(this.player.position.x,nextZ))this.player.position.z=nextZ;moving=true}
     this.moving=moving;const bob=moving?Math.sin(this.elapsed*11)*.035:0;this.camera.position.set(this.player.position.x,1.62+bob,this.player.position.z);this.camera.rotation.set(this.pitch,this.yaw,0,'YXZ');this.updateFuelHoseVisual()
   }
-  placeHoseSegment(mesh,a,b){const d=new THREE.Vector3().subVectors(b,a),length=d.length();mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.scale.set(1,length,1);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize())}
+  placeHoseSegment(mesh,a,b){const d=this.hoseDirection.subVectors(b,a),length=d.length();mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.scale.set(1,length,1);mesh.quaternion.setFromUnitVectors(this.hoseUp,d.normalize())}
   updateFuelHoseVisual(){
     const active=this.fuelHose&&this.carry==='hose'&&this.player;if(!active){this.hoseWorld.visible=false;return}
-    const anchor=this.fuelHose.pump.model.localToWorld(new THREE.Vector3(.62,1.68,0)),hand=new THREE.Vector3(this.player.position.x+Math.cos(this.yaw)*.27,.92,this.player.position.z-Math.sin(this.yaw)*.27),sag=anchor.clone().lerp(hand,.52);sag.y=Math.min(anchor.y,hand.y)-.48;
-    this.placeHoseSegment(this.hoseSegments[0],anchor,sag);this.placeHoseSegment(this.hoseSegments[1],sag,hand);this.hoseWorld.visible=true
+    const anchor=this.hosePoints[0].set(.62,1.68,0);this.fuelHose.pump.model.localToWorld(anchor);
+    const hand=this.hosePoints.at(-1),forwardX=-Math.sin(this.yaw),forwardZ=-Math.cos(this.yaw),rightX=Math.cos(this.yaw),rightZ=-Math.sin(this.yaw);hand.set(this.player.position.x+forwardX*.5+rightX*.3,this.camera.position.y-.36,this.player.position.z+forwardZ*.5+rightZ*.3);
+    const control=this.hoseControl.copy(anchor).lerp(hand,.52);control.y=Math.max(.82,Math.min(anchor.y,hand.y)-.38);
+    let minHeight=Math.min(anchor.y,hand.y);for(let i=1;i<this.hosePoints.length-1;i++){const t=i/(this.hosePoints.length-1),u=1-t,p=this.hosePoints[i];p.set(u*u*anchor.x+2*u*t*control.x+t*t*hand.x,u*u*anchor.y+2*u*t*control.y+t*t*hand.y,u*u*anchor.z+2*u*t*control.z+t*t*hand.z);minHeight=Math.min(minHeight,p.y)}
+    this.hoseSegments.forEach((segment,i)=>this.placeHoseSegment(segment,this.hosePoints[i],this.hosePoints[i+1]));this.hoseWorld.userData.minHeight=minHeight;this.hoseWorld.visible=true
   }
   isBlocked(x,z,ignoreVehicle=null){
     const r=PLAYER_RADIUS;if(x<-9.2+r||x>9.2-r||z<-13.2+r||z>4.55-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
