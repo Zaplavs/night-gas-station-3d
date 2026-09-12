@@ -11,28 +11,25 @@ await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
-const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
+const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));const glass=g.assets.car.getObjectByName('FrontWindow');return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver'))}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
 const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
+  const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
+  const hold=(done,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!done();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return done()};
   for(const index of [0,1]){
     g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.jobs=g.jobs.filter(j=>j.hidden);
     g.pumps.forEach((p,i)=>{p.car=i===index?null:{};p.broken=false});
     g.spawnCar();const car=g.cars[0];
     if(!car){out.push({index,parked:false});continue}
     for(let i=0;i<900&&car.status==='entering';i++)g.updateCars(.05);
-    let spot=null;
-    for(let z=-3;z>=-12&&!spot;z-=.1){const x=car.pump.x;if(g.isBlocked(x,z))continue;
-      g.player.position.set(x,.26,z);g.updateInteraction(0);
-      if(g.nearest&&g.nearest.car===car)spot={x,z}}
-    let paid=0,fuelingSeen=false;
-    if(spot){const before=g.state.money;g.player.position.set(spot.x,.26,spot.z);g.updateInteraction(0);
-      g.actionLatched=false;g.actionHeld=true;
-      for(let i=0;i<200&&paid<=0;i++){g.updateInteraction(.05);fuelingSeen||=car.status==='fueling';paid=g.state.money-before}
-      g.actionHeld=false;g.actionLatched=false}
+    const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup'),pickupSpot=pickup&&findSpot(pickup);let tookHose=false,hoseShown=false,fuelSpot=null,paid=0,fuelingSeen=false,hoseReturned=false;
+    if(pickupSpot){g.player.position.set(pickupSpot.x,.26,pickupSpot.z);g.updateInteraction(0);tookHose=hold(()=>g.carry==='hose');hoseShown=tookHose&&g.hands.current==='hose'&&g.hoseWorld.visible&&g.hoseSegments.every(s=>Number.isFinite(s.scale.y)&&s.scale.y>.1)&&car.pump.hoseParts.length>0&&car.pump.hoseParts.every(o=>!o.visible)}
+    const fuel=g.jobs.find(j=>j.car===car&&j.kind==='fuel');fuelSpot=fuel&&findSpot(fuel);
+    if(fuelSpot){const before=g.state.money;g.player.position.set(fuelSpot.x,.26,fuelSpot.z);g.updateInteraction(0);hold(()=>{fuelingSeen||=car.status==='fueling';paid=g.state.money-before;return paid>0});hoseReturned=g.carry===null&&!g.fuelHose&&car.pump.hoseParts.every(o=>o.visible)}
     const probes=[-6.2,-6.1,-8.6,-8.7].map(z=>({z,blocked:g.isBlocked(car.pump.x,z),distance:Math.hypot(car.spot.x-car.pump.x,car.spot.z-z)}));
-    out.push({index,state:car.status,phase:car.phase,parked:car.status!=='entering',reachable:!!spot,fuelingSeen,paid:paid>0,spot:{x:car.spot.x,z:car.spot.z},carAt:{x:car.group.position.x,z:car.group.position.z,yaw:car.group.rotation.y},fuelJob:g.jobs.some(j=>j.car===car&&j.kind==='fuel'),probes});
+    out.push({index,state:car.status,phase:car.phase,parked:car.status!=='entering',pickupReachable:!!pickupSpot,tookHose,hoseShown,fuelReachable:!!fuelSpot,fuelingSeen,paid:paid>0,hoseReturned,spot:{x:car.spot.x,z:car.spot.z},carAt:{x:car.group.position.x,z:car.group.position.z,yaw:car.group.rotation.y},probes});
   }
   g.pumps.forEach(p=>{p.car=null});return out;});
-if(service.some(r=>!r.parked||!r.reachable||!r.fuelingSeen||!r.paid))throw new Error(`Refuelling is not reachable from the pump: ${JSON.stringify(service)}`);
+if(service.some(r=>!r.parked||!r.pickupReachable||!r.tookHose||!r.hoseShown||!r.fuelReachable||!r.fuelingSeen||!r.paid||!r.hoseReturned))throw new Error(`Two-step refuelling failed: ${JSON.stringify(service)}`);
 const onRoad=p=>Math.abs(p.x)>40&&p.z<-12.4&&p.z>-21.6;
 const road=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0];
@@ -83,7 +80,7 @@ const mergeQueue=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(v=>g.despawn(v,g.cars));g.traffic.slice().forEach(v=>g.despawn(v,g.traffic));g.pumps.forEach(p=>p.car=null);return {yielded,released,trafficAdvanced};});
 if(Object.values(mergeQueue).some(v=>!v))throw new Error(`Road merge queue deadlocked: ${JSON.stringify(mergeQueue)}`);
 const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
-  for(const item of ['coffee','box','mop','tools','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
+  for(const item of ['coffee','box','mop','tools','hose','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
   g.carry=null;g.updateCarry();seen.emptyHidden=!g.hands.rig.visible;
   g.carry='coffee';g.updateCarry();g.hands.update(.016,{moving:true,acting:true,yawDelta:.01,pitchDelta:0});
   seen.animates=Number.isFinite(g.hands.items.coffee.position.z);return seen;});
@@ -135,4 +132,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: first-person controls, deadlock-free vehicle merging, road routing, items in hands, guide and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: visible drivers, two-step hose refuelling, deadlock-free traffic, items in hands, guide and desktop/mobile UI are working.');await browser.close();

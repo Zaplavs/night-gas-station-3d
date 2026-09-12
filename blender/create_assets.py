@@ -20,14 +20,20 @@ def reset():
         pass
 
 
-def mat(name, color, metallic=0.0, roughness=0.72, emission=None):
+def mat(name, color, metallic=0.0, roughness=0.72, emission=None, alpha=1.0):
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
-    m.diffuse_color = (*color, 1)
+    m.diffuse_color = (*color, alpha)
     m.use_nodes = True
     bsdf = m.node_tree.nodes.get("Principled BSDF")
     bsdf.inputs["Base Color"].default_value = (*color, 1)
     bsdf.inputs["Roughness"].default_value = roughness
     bsdf.inputs["Metallic"].default_value = metallic
+    bsdf.inputs["Alpha"].default_value = alpha
+    if alpha < 1:
+        try:
+            m.surface_render_method = "DITHERED"
+        except Exception:
+            m.blend_method = "BLEND"
     if emission:
         bsdf.inputs["Emission Color"].default_value = (*emission, 1)
         bsdf.inputs["Emission Strength"].default_value = 2.5
@@ -41,7 +47,7 @@ M = {
     "charcoal": mat("Charcoal", (0.035, 0.045, 0.055)),
     "asphalt": mat("Asphalt", (0.075, 0.09, 0.105)),
     "concrete": mat("Concrete", (0.3, 0.31, 0.3)),
-    "glass": mat("Night glass", (0.04, 0.18, 0.22), metallic=0.12, roughness=0.18),
+    "glass": mat("Night glass", (0.04, 0.18, 0.22), metallic=0.12, roughness=0.18, alpha=.34),
     "white": mat("Paint white", (0.78, 0.8, 0.74)),
     "yellow": mat("Safety yellow", (1.0, 0.48, 0.035), emission=(0.45, 0.12, 0.0)),
     "cyan": mat("Cold light", (0.35, 0.82, 0.9), emission=(0.28, 0.7, 0.85)),
@@ -199,7 +205,27 @@ def make_pump():
 def make_car():
     reset()
     cube("CarBody", (0,.55,0), (1.05,.38,2.0), M["red"], .22)
-    cube("CarCabin", (0,1.03,.18), (.82,.43,1.05), M["glass"], .18)
+    # Отдельные окна вместо непрозрачного куба: салон и водитель читаются с любой стороны.
+    cube("CarBodyRoof", (0,1.49,.2), (.84,.08,.92), M["red"], .08)
+    cube("FrontWindow", (0,1.19,-.85), (.68,.28,.025), M["glass"], .015)
+    cube("RearWindow", (0,1.19,1.22), (.68,.28,.025), M["glass"], .015)
+    for x in (-.82,.82):
+        cube("SideWindow", (x,1.19,.18), (.025,.28,.76), M["glass"], .012)
+        for z in (-.84,1.2):
+            cube("CarBodyPillar", (x,1.2,z), (.055,.34,.055), M["red"], .025)
+    cube("Dashboard", (0,.96,-.72), (.76,.09,.18), M["charcoal"], .04)
+    for x in (-.38,.38):
+        cube("Seat", (x,.88,.37), (.25,.28,.3), M["charcoal"], .07)
+        cube("Headrest", (x,1.17,.48), (.2,.17,.13), M["charcoal"], .05)
+    # Low-poly водитель слева: голова, волосы, куртка и руки на руле.
+    cyl("DriverTorso", (-.38,1.05,-.02), .2, .43, M["blue"], 8)
+    sphere("DriverHead", (-.38,1.37,-.16), (.16,.18,.16), M["skin"])
+    cube("DriverHair", (-.38,1.51,-.14), (.16,.055,.15), M["charcoal"], .035)
+    for x in (-.54,-.22):
+        cyl("DriverArm", (x,1.06,-.43), .045, .36, M["skin"], 7, rotation=(math.pi/2,0,0))
+    bpy.ops.mesh.primitive_torus_add(major_radius=.18, minor_radius=.025, major_segments=10, minor_segments=5,
+                                    location=gltf_loc((-.38,1.08,-.63)), rotation=gltf_rotation((math.pi/2,0,0)))
+    finish(bpy.context.object, "SteeringWheel", M["charcoal"])
     cube("FrontBumper", (0,.42,-2.02), (1.0,.18,.09), M["chrome"], .05)
     cube("RearBumper", (0,.42,2.02), (1.0,.18,.09), M["chrome"], .05)
     for x in (-1.02,1.02):
@@ -208,14 +234,25 @@ def make_car():
             cyl("Hub", (x*1.01,.42,z), .14, .26, M["chrome"], 10, rotation=(0,0,math.pi/2))
     for x in (-.68,.68):
         cube("Headlight", (x,.62,-2.03), (.22,.14,.035), M["yellow"], .04)
+        cube("TailLight", (x,.62,2.03), (.2,.13,.035), M["red"], .035)
     export("car")
 
 
 def make_van():
     reset()
-    cube("VanBody", (0,.92,.25), (1.12,.82,2.25), M["purple"], .16)
-    cube("VanNose", (0,.6,-2.0), (1.08,.5,.52), M["purple"], .16)
-    cube("Windshield", (0,1.28,-1.78), (.88,.38,.035), M["glass"], .08)
+    # Грузовой отсек начинается позади кабины, поэтому через стёкла видно пустые сиденья.
+    cube("VanBody", (0,1.0,.68), (1.12,.82,1.57), M["purple"], .16)
+    cube("VanNose", (0,.55,-1.78), (1.08,.45,.74), M["purple"], .16)
+    cube("VanRoof", (0,1.76,-1.5), (1.1,.1,.68), M["purple"], .07)
+    cube("Windshield", (0,1.34,-2.48), (.88,.32,.035), M["glass"], .025)
+    for x in (-1.09,1.09):
+        cube("VanSideWindow", (x,1.34,-1.58), (.025,.32,.54), M["glass"], .012)
+        for z in (-2.4,-.95):
+            cube("VanPillar", (x,1.36,z), (.055,.37,.055), M["purple"], .025)
+    cube("VanDashboard", (0,1.03,-2.17), (.9,.1,.18), M["charcoal"], .04)
+    for x in (-.42,.42):
+        cube("VanEmptySeat", (x,1.02,-1.42), (.28,.34,.32), M["charcoal"], .08)
+        cube("VanEmptyHeadrest", (x,1.38,-1.28), (.21,.18,.14), M["charcoal"], .05)
     cube("MysteryCargoDoor", (0,1.0,2.52), (.82,.62,.035), M["charcoal"], .04)
     for x in (-1.08,1.08):
         for z in (-1.45,1.45):

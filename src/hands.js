@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 const PAL={skin:0xc07a44,cuff:0x14415c,steel:0xa4b0b6,dark:0x1a2126,cup:0xf1e9d6,lid:0x232a2e,
   sleeve:0x8b5c2c,card:0x996233,tape:0xd7c49b,mop:0x5cc6d6,grip:0xffae35,bread:0xdcb87a,
-  filling:0x8fbf5f,paper:0xeae4d0,red:0xc8402c};
+  filling:0x8fbf5f,paper:0xeae4d0,red:0xc8402c,yellow:0xf1a62b,hose:0x111619};
 const cache={};
 const mat=(key,color,roughness=.78,metalness=0)=>cache[key]||(cache[key]=new THREE.MeshStandardMaterial({color,roughness,metalness}));
 const geo={};
@@ -120,6 +120,18 @@ function tools(){
   return g;
 }
 
+function fuelHose(){
+  const g=new THREE.Group(),yellow=mat('nozzle',PAL.yellow,.55,.18),rubber=mat('hose',PAL.hose,.92),steel=mat('steel',PAL.steel,.35,.7);
+  put(g,box('nozzleBody',.09,.1,.24),yellow,0,.02,-.04,0,-.12,0);
+  put(g,box('nozzleGrip',.065,.19,.07),rubber,.015,-.105,.035,0,0,-.28);
+  put(g,cyl('nozzleSpout',.018,.022,.31,8),steel,0,.075,-.25,Math.PI/2,0,0);
+  put(g,cyl('hoseTail',.028,.028,.42,8),rubber,.03,-.29,.13,-.48,0,0);
+  const h=hand(1);h.position.set(.015,-.08,.06);h.rotation.set(.08,0,.2);g.add(h);
+  g.position.set(.245,-.23,-.58);g.rotation.set(.12,-.22,-.08);
+  g.userData.anim=(o,t,use)=>{o.position.z=-.58+use*.13;o.rotation.x=.12-use*.28+Math.sin(t*1.5)*.018;o.rotation.y=-.22+use*.08};
+  return g;
+}
+
 function lostBag(model){
   const g=new THREE.Group();
   if(model){const m=model.clone(true);m.scale.setScalar(.26);m.position.set(0,-.04,0);g.add(m)}
@@ -142,7 +154,7 @@ export class HandView{
     this.sway=new THREE.Vector2();this.swayTo=new THREE.Vector2();this.aspect=0;
   }
   build(assets){
-    const made={coffee:coffee(),snack:snack(),box:crate(),mop:mop(),tools:tools(),bag:lostBag(assets&&assets.bag)};
+    const made={coffee:coffee(),snack:snack(),box:crate(),mop:mop(),tools:tools(),hose:fuelHose(),bag:lostBag(assets&&assets.bag)};
     for(const [name,group] of Object.entries(made)){group.visible=false;this.items[name]=group;this.rig.add(group)}
   }
   set(name){
