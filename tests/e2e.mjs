@@ -70,6 +70,18 @@ const vehicleCollision=await page.evaluate(()=>{const g=window.__nightStation;
   blocker.group.position.set(8,0,3);for(let i=0;i<80&&mover.dist<=heldAt+.05;i++)g.updateCars(.05);const resumed=mover.dist>heldAt+.05;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.pumps.forEach(p=>p.car=null);return {spawned:true,blocked,stayed,resumed};});
 if(Object.values(vehicleCollision).some(v=>!v))throw new Error(`Vehicle collision avoidance failed: ${JSON.stringify(vehicleCollision)}`);
+const mergeQueue=await page.evaluate(()=>{const g=window.__nightStation;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.jobs=g.jobs.filter(j=>j.hidden);g.pumps.forEach((p,i)=>{p.car=i?{}:null;p.broken=false});g.player.position.set(0,.26,-3);
+  g.spawnCar();const c=g.cars[0];for(let i=0;i<900&&c.status==='entering';i++)g.updateCars(.05);g.leaveCar(c);
+  for(let i=0;i<500&&c.phase==='reversing';i++)g.updateCars(.05);
+  const away=-c.side,lane=away>0?-14.9:-19.1,start=c.slotX+c.side*4.6,mergeX=start+away*14;
+  const addTrafficAt=targetX=>{for(let tries=0;tries<12;tries++){g.trafficTimer=-1;g.updateTraffic(0);const t=g.traffic.at(-1);if(!t)return null;const z=t.path.curve.getPointAt(0).z;if(Math.abs(z-lane)>.2){g.despawn(t,g.traffic);continue}let best=0,error=Infinity;for(let i=0;i<=300;i++){const u=i/300,d=Math.abs(t.path.curve.getPointAt(u).x-targetX);if(d<error){error=d;best=u}}t.dist=t.path.len*best;t.t=best;t.path.curve.getPointAt(best,t.group.position);const tangent=t.path.curve.getTangentAt(best);t.group.rotation.y=Math.atan2(-tangent.x,-tangent.z);return t}return null};
+  const convoy=[addTrafficAt(mergeX-away*4),addTrafficAt(mergeX-away*14)].filter(Boolean),before=convoy.map(t=>t.dist);
+  g.updateCars(.05);const yielded=c.phase==='yielding'&&convoy.length===2;
+  let released=false;for(let i=0;i<1200&&!released;i++){g.updateCars(.05);released=c.phase==='exiting'||!g.cars.includes(c)}
+  const trafficAdvanced=convoy.every((t,i)=>!g.traffic.includes(t)||t.dist>before[i]+5);
+  g.cars.slice().forEach(v=>g.despawn(v,g.cars));g.traffic.slice().forEach(v=>g.despawn(v,g.traffic));g.pumps.forEach(p=>p.car=null);return {yielded,released,trafficAdvanced};});
+if(Object.values(mergeQueue).some(v=>!v))throw new Error(`Road merge queue deadlocked: ${JSON.stringify(mergeQueue)}`);
 const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
   for(const item of ['coffee','box','mop','tools','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
   g.carry=null;g.updateCarry();seen.emptyHidden=!g.hands.rig.visible;
@@ -123,4 +135,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: first-person controls, safe vehicle state machine, road routing, items in hands, guide and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: first-person controls, deadlock-free vehicle merging, road routing, items in hands, guide and desktop/mobile UI are working.');await browser.close();
