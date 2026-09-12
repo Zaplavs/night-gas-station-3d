@@ -126,8 +126,9 @@ function fuelHose(){
   put(g,box('nozzleGrip',.065,.19,.07),rubber,.015,-.105,.035,0,0,-.28);
   put(g,cyl('nozzleSpout',.018,.022,.31,8),steel,0,.075,-.25,Math.PI/2,0,0);
   put(g,cyl('hoseTail',.028,.028,.42,8),rubber,.03,-.29,.13,-.48,0,0);
+  const socket=new THREE.Object3D();socket.name='HoseSocket';socket.position.set(.03,-.1,.035);g.add(socket);g.userData.socket=socket;
   const h=hand(1);h.position.set(.015,-.08,.06);h.rotation.set(.08,0,.2);g.add(h);
-  g.position.set(.245,-.23,-.58);g.rotation.set(.12,-.22,-.08);
+  g.position.set(.245,-.17,-.58);g.rotation.set(.12,-.22,-.08);
   g.userData.anim=(o,t,use)=>{o.position.z=-.58+use*.13;o.rotation.x=.12-use*.28+Math.sin(t*1.5)*.018;o.rotation.y=-.22+use*.08};
   return g;
 }
@@ -165,6 +166,10 @@ export class HandView{
     if(next){this.items[next].visible=true;this.raise=0;this.use=0}
     this.rig.visible=!!next;
   }
+  setAspect(aspect){if(aspect!==this.aspect){this.aspect=aspect;this.camera.aspect=aspect;this.camera.updateProjectionMatrix()}}
+  getHoseSocketNDC(target,aspect){
+    const socket=this.items.hose?.userData.socket;if(!socket||this.current!=='hose')return null;this.setAspect(aspect);this.scene.updateMatrixWorld(true);this.camera.updateMatrixWorld(true);return socket.getWorldPosition(target).project(this.camera)
+  }
   update(dt,state){
     if(!this.current)return;
     const item=this.items[this.current];
@@ -181,7 +186,7 @@ export class HandView{
   }
   render(renderer,aspect){
     if(!this.rig.visible)return;
-    if(aspect!==this.aspect){this.aspect=aspect;this.camera.aspect=aspect;this.camera.updateProjectionMatrix()}
+    this.setAspect(aspect);
     renderer.autoClear=false;renderer.clearDepth();renderer.render(this.scene,this.camera);renderer.autoClear=true;
   }
 }
