@@ -8,7 +8,7 @@ await page.goto(baseUrl,{waitUntil:'networkidle'});
 await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
-await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='fuel'),null,{timeout:45000});
+await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
 const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
@@ -18,32 +18,58 @@ const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
     g.pumps.forEach((p,i)=>{p.car=i===index?null:{};p.broken=false});
     g.spawnCar();const car=g.cars[0];
     if(!car){out.push({index,parked:false});continue}
-    for(let i=0;i<900&&car.status==='arriving';i++)g.updateCars(.05);
+    for(let i=0;i<900&&car.status==='entering';i++)g.updateCars(.05);
     let spot=null;
     for(let z=-3;z>=-12&&!spot;z-=.1){const x=car.pump.x;if(g.isBlocked(x,z))continue;
       g.player.position.set(x,.26,z);g.updateInteraction(0);
       if(g.nearest&&g.nearest.car===car)spot={x,z}}
-    let paid=0;
+    let paid=0,fuelingSeen=false;
     if(spot){const before=g.state.money;g.player.position.set(spot.x,.26,spot.z);g.updateInteraction(0);
       g.actionLatched=false;g.actionHeld=true;
-      for(let i=0;i<200&&paid<=0;i++){g.updateInteraction(.05);paid=g.state.money-before}
+      for(let i=0;i<200&&paid<=0;i++){g.updateInteraction(.05);fuelingSeen||=car.status==='fueling';paid=g.state.money-before}
       g.actionHeld=false;g.actionLatched=false}
-    out.push({index,parked:car.status!=='arriving',reachable:!!spot,paid:paid>0});
+    const probes=[-6.2,-6.1,-8.6,-8.7].map(z=>({z,blocked:g.isBlocked(car.pump.x,z),distance:Math.hypot(car.spot.x-car.pump.x,car.spot.z-z)}));
+    out.push({index,state:car.status,phase:car.phase,parked:car.status!=='entering',reachable:!!spot,fuelingSeen,paid:paid>0,spot:{x:car.spot.x,z:car.spot.z},carAt:{x:car.group.position.x,z:car.group.position.z,yaw:car.group.rotation.y},fuelJob:g.jobs.some(j=>j.car===car&&j.kind==='fuel'),probes});
   }
   g.pumps.forEach(p=>{p.car=null});return out;});
-if(service.some(r=>!r.parked||!r.reachable||!r.paid))throw new Error(`Refuelling is not reachable from the pump: ${JSON.stringify(service)}`);
+if(service.some(r=>!r.parked||!r.reachable||!r.fuelingSeen||!r.paid))throw new Error(`Refuelling is not reachable from the pump: ${JSON.stringify(service)}`);
 const onRoad=p=>Math.abs(p.x)>40&&p.z<-12.4&&p.z>-21.6;
 const road=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0];
-  for(let i=0;i<900&&c.status==='arriving';i++)g.updateCars(.05);
+  for(let i=0;i<900&&c.status==='entering';i++)g.updateCars(.05);
   const start=c.path.curve.getPointAt(0),end=c.path.curve.getPointAt(1);
-  c.status='fuel';g.leaveCar(c);let reversedFirst=c.status==='reversing',left=false;
-  for(let i=0;i<500&&!left;i++){g.updateCars(.05);left=c.status==='leaving'}
+  c.status='waiting';g.leaveCar(c);let reversedFirst=c.status==='leaving'&&c.phase==='reversing',left=false;
+  for(let i=0;i<500&&!left;i++){g.updateCars(.05);left=c.phase==='exiting'}
   const exit=left?c.path.curve.getPointAt(1):null;
   return {start:{x:start.x,z:start.z},parked:{x:end.x,z:end.z},slot:{x:c.target.x,z:c.target.z},reversedFirst,left,exit:exit&&{x:exit.x,z:exit.z}};});
 const roadChecks={arrivesFromRoad:onRoad(road.start),parksAtPump:Math.hypot(road.parked.x-road.slot.x,road.parked.z-road.slot.z)<.1,
   reversesOut:road.reversedFirst,leavesOnRoad:road.left&&onRoad(road.exit)};
 if(Object.values(roadChecks).some(v=>!v))throw new Error(`Car road routing failed: ${JSON.stringify(roadChecks)} ${JSON.stringify(road)}`);
+const safety=await page.evaluate(()=>{const g=window.__nightStation;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.jobs=g.jobs.filter(j=>j.hidden);g.pumps.forEach((p,i)=>{p.car=i?{}:null;p.broken=false});
+  g.spawnCar();const c=g.cars[0];g.player.position.set(c.safeZone.x,.26,c.safeZone.z);
+  for(let i=0;i<900&&!c.blockedByPlayer;i++)g.updateCars(.05);
+  const heldAt=c.dist;for(let i=0;i<80;i++)g.updateCars(.05);
+  const stopped=c.status==='entering'&&c.blockedByPlayer&&Math.abs(c.dist-heldAt)<.001;
+  const playerFree=!g.isBlocked(g.player.position.x,g.player.position.z);
+  g.player.position.set(0,.26,-3);for(let i=0;i<900&&c.status==='entering';i++)g.updateCars(.05);
+  const resumed=c.status==='waiting'&&c.phase==='parked';
+  g.player.position.copy(c.group.position);for(let i=0;i<120&&g.pointInVehicle(g.player.position.x,g.player.position.z,c,.36);i++)g.resolvePlayerOverlap(c,.05);
+  const pushedClear=!g.pointInVehicle(g.player.position.x,g.player.position.z,c,.36)&&!g.isBlocked(g.player.position.x,g.player.position.z);
+  g.leaveCar(c);const leaving=c.status==='leaving'&&c.phase==='reversing';
+  return {stopped,playerFree,resumed,pushedClear,leaving};});
+if(Object.values(safety).some(v=>!v))throw new Error(`Vehicle/player safety failed: ${JSON.stringify(safety)}`);
+const vehicleCollision=await page.evaluate(()=>{const g=window.__nightStation;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.jobs=g.jobs.filter(j=>j.hidden);g.pumps.forEach(p=>{p.car=null;p.broken=false});g.player.position.set(0,.26,-3);
+  g.spawnCar();g.spawnCar();if(g.cars.length!==2)return {spawned:false};
+  const mover=g.cars[0],blocker=g.cars[1],ahead=Math.min(mover.path.len,mover.dist+5),u=ahead/mover.path.len,tangent=mover.path.curve.getTangentAt(u);
+  mover.path.curve.getPointAt(u,blocker.group.position);blocker.group.rotation.y=Math.atan2(-tangent.x,-tangent.z);blocker.status='waiting';blocker.speed=0;
+  for(let i=0;i<160&&!mover.blockedByVehicle;i++)g.updateCars(.05);
+  const heldAt=mover.dist,blocked=mover.blockedByVehicle===blocker&&!g.vehiclesOverlap(mover,mover.group.position,mover.group.rotation.y,blocker,0);
+  for(let i=0;i<60;i++)g.updateCars(.05);const stayed=Math.abs(mover.dist-heldAt)<.001;
+  blocker.group.position.set(8,0,3);for(let i=0;i<80&&mover.dist<=heldAt+.05;i++)g.updateCars(.05);const resumed=mover.dist>heldAt+.05;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.pumps.forEach(p=>p.car=null);return {spawned:true,blocked,stayed,resumed};});
+if(Object.values(vehicleCollision).some(v=>!v))throw new Error(`Vehicle collision avoidance failed: ${JSON.stringify(vehicleCollision)}`);
 const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
   for(const item of ['coffee','box','mop','tools','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
   g.carry=null;g.updateCarry();seen.emptyHidden=!g.hands.rig.visible;
@@ -80,7 +106,7 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
 if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
 const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();
   const start=g.specialVan.path.curve.getPointAt(0);
-  for(let i=0;i<600&&g.specialVan.status==='arriving';i++)g.updateCars(.05);
+  for(let i=0;i<600&&g.specialVan.status==='entering';i++)g.updateCars(.05);
   const parked=g.specialVan.status==='waiting'&&!!g.jobs.find(j=>j.title==='Проверьте странный фургон');
   g.leaveSpecialVan();
   for(let i=0;i<900&&g.specialVan;i++)g.updateCars(.05);
@@ -97,4 +123,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: first-person controls, collisions, road arrival/departure, items in hands, guide and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: first-person controls, safe vehicle state machine, road routing, items in hands, guide and desktop/mobile UI are working.');await browser.close();

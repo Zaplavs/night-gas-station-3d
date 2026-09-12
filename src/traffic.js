@@ -6,7 +6,7 @@ import * as THREE from 'three';
 export const ROAD={center:-17,near:-14.9,far:-19.1,edge:58,y:-.05};
 export const laneFor=dir=>dir>0?ROAD.near:ROAD.far; // правостороннее движение
 
-const TMP=new THREE.Vector3();
+const TMP=new THREE.Vector3(),NEXT=new THREE.Vector3();
 const point=([x,z])=>new THREE.Vector3(x,ROAD.y,z);
 
 export function path(points,{reverse=false,stop=true}={}){
@@ -71,16 +71,22 @@ export function addLights(group,{front=-2.05,back=2.05,width=.64,y=.6,dark=false
 export function drive(vehicle,dt){
   const p=vehicle.path;if(!p)return true;
   const remain=p.len-vehicle.dist;
+  if(remain<=1e-4)return true;
   // Подкат к точке остановки не гаснет до нуля: иначе машина замирает в сантиметре от колонки и «не доезжает».
   const goal=p.stop?Math.min(vehicle.maxSpeed,Math.max(.5,Math.sqrt(Math.max(0,remain-.25)*6.5))):vehicle.maxSpeed;
   const braking=goal<vehicle.speed-.25;
-  vehicle.speed=Math.max(0,THREE.MathUtils.clamp(goal,vehicle.speed-9*dt,vehicle.speed+4.2*dt));
-  vehicle.dist=Math.min(p.len,vehicle.dist+vehicle.speed*dt);
-  vehicle.t=p.len?vehicle.dist/p.len:1;
-  const u=Math.min(1,vehicle.t);
-  p.curve.getPointAt(u,vehicle.group.position);
+  const nextSpeed=Math.max(0,THREE.MathUtils.clamp(goal,vehicle.speed-9*dt,vehicle.speed+4.2*dt));
+  const nextDist=Math.min(p.len,vehicle.dist+nextSpeed*dt),nextT=p.len?nextDist/p.len:1,u=Math.min(1,nextT);
+  p.curve.getPointAt(u,NEXT);
   p.curve.getTangentAt(u,TMP);
-  vehicle.group.rotation.y=Math.atan2(-TMP.x,-TMP.z)+(p.reverse?Math.PI:0);
+  const rotationY=Math.atan2(-TMP.x,-TMP.z)+(p.reverse?Math.PI:0);
+  // Сервисные машины могут отменить шаг, если следующий объём кузова займёт игрок.
+  if(vehicle.canAdvance&&!vehicle.canAdvance({position:NEXT,rotationY,from:vehicle.group.position,distance:nextDist})){
+    vehicle.blocked=true;vehicle.speed=Math.max(0,vehicle.speed-14*dt);
+    vehicle.lights?.set({beam:vehicle.speed>.15,brake:true,reverse:!!p.reverse});return false;
+  }
+  vehicle.blocked=false;vehicle.speed=nextSpeed;vehicle.dist=nextDist;vehicle.t=nextT;
+  vehicle.group.position.copy(NEXT);vehicle.group.rotation.y=rotationY;
   vehicle.lights?.set({beam:vehicle.speed>.15,brake:braking||vehicle.speed<.5,reverse:!!p.reverse});
   return vehicle.dist>=p.len-1e-4;
 }

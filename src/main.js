@@ -17,6 +17,8 @@ const audio=new AudioSystem();
 const SAVE_DEFAULT={money:0,shift:1,rep:3,upgrades:{speed:0,service:0,coffee:0},tutorial:false,sound:true,best:0};
 const isTouch=matchMedia('(pointer:coarse)').matches;
 const SLOT_Z=-7.4,SLOT_OFFSET=2.3,VAN_SLOT={x:7.6,z:-7.4};
+const VEHICLE_STATE=Object.freeze({ENTERING:'entering',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
+const PLAYER_RADIUS=.36,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12;
 const MOP_SPOT=new THREE.Vector3(-3.7,.25,-3.25),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
 const STOW_NOTE={mop:'Швабра вернулась на место',tools:'Инструменты вернулись в ящик'};
 const NEED_HINT={mop:'Сначала возьмите швабру у входа',tools:'Сначала возьмите инструменты в магазине'};
@@ -128,25 +130,68 @@ class NightStationGame{
     if(len>.05){strafe/=Math.max(1,len);forward/=Math.max(1,len);const run=this.keys.ShiftLeft||this.keys.ShiftRight?1.55:1,speed=(4.35+this.state.upgrades.speed*.52)*run,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rx=Math.cos(this.yaw),rz=-Math.sin(this.yaw),dx=(rx*strafe+fx*forward)*speed*dt,dz=(rz*strafe+fz*forward)*speed*dt;const nextX=this.player.position.x+dx,nextZ=this.player.position.z+dz,stuck=this.isBlocked(this.player.position.x,this.player.position.z);if(stuck||!this.isBlocked(nextX,this.player.position.z))this.player.position.x=nextX;if(stuck||!this.isBlocked(this.player.position.x,nextZ))this.player.position.z=nextZ;moving=true}
     this.moving=moving;const bob=moving?Math.sin(this.elapsed*11)*.035:0;this.camera.position.set(this.player.position.x,1.62+bob,this.player.position.z);this.camera.rotation.set(this.pitch,this.yaw,0,'YXZ')
   }
-  isBlocked(x,z){
-    const r=.36;if(x<-9.2+r||x>9.2-r||z<-13.2+r||z>4.55-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
+  isBlocked(x,z,ignoreVehicle=null){
+    const r=PLAYER_RADIUS;if(x<-9.2+r||x>9.2-r||z<-13.2+r||z>4.55-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
     const fixed=[[-4.95,4.95,4.7,5.05],[-4.92,-4.44,-2.7,5.05],[4.44,4.92,-2.7,5.05],[-3.12,3.12,-1.23,.13],[-4.22,-2.88,1.0,4.08],[2.88,4.22,1.0,4.08],[-2.55-.73,-2.55+.73,-8.15,-6.65],[2.55-.73,2.55+.73,-8.15,-6.65]];if(fixed.some(a=>hitRect(...a)))return true;
     const circles=[[-6.6,-5.2,.3],[4.1,-2.25,.25],[-3.7,-3.25,.28],[4.1,4.1,.42]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
-    for(const c of this.cars){if(hitRect(c.group.position.x-1.18,c.group.position.x+1.18,c.group.position.z-2.2,c.group.position.z+2.2))return true}if(this.specialVan&&hitRect(this.specialVan.group.position.x-1.28,this.specialVan.group.position.x+1.28,this.specialVan.group.position.z-2.5,this.specialVan.group.position.z+2.5))return true;return false
+    for(const c of this.cars){if(c!==ignoreVehicle&&this.pointInVehicle(x,z,c,PLAYER_RADIUS))return true}if(this.specialVan&&this.specialVan!==ignoreVehicle&&this.pointInVehicle(x,z,this.specialVan,PLAYER_RADIUS))return true;return false
+  }
+  pointInVehicle(x,z,vehicle,margin=0,position=vehicle.group.position,rotationY=vehicle.group.rotation.y){
+    const dx=x-position.x,dz=z-position.z,c=Math.cos(rotationY),s=Math.sin(rotationY),lx=dx*c-dz*s,lz=dx*s+dz*c;
+    return Math.abs(lx)<vehicle.halfWidth+margin&&Math.abs(lz)<vehicle.halfLength+margin
+  }
+  playerInStopZone(vehicle){
+    const z=vehicle.safeZone;if(!z||!this.player)return false;
+    return Math.abs(this.player.position.x-z.x)<z.halfWidth&&Math.abs(this.player.position.z-z.z)<z.halfLength
+  }
+  activeVehicles(){return [...this.cars,...this.traffic,...(this.specialVan?[this.specialVan]:[])]}
+  vehiclesOverlap(vehicle,position,rotationY,other,margin=VEHICLE_MARGIN){
+    const ac=Math.cos(rotationY),as=Math.sin(rotationY),bc=Math.cos(other.group.rotation.y),bs=Math.sin(other.group.rotation.y);
+    const axes=[[ac,-as],[as,ac],[bc,-bs],[bs,bc]],dx=other.group.position.x-position.x,dz=other.group.position.z-position.z;
+    const ahw=vehicle.halfWidth+margin/2,ahl=vehicle.halfLength+margin/2,bhw=other.halfWidth+margin/2,bhl=other.halfLength+margin/2;
+    for(const [x,z] of axes){
+      const distance=Math.abs(dx*x+dz*z),aRadius=ahw*Math.abs(x*ac-z*as)+ahl*Math.abs(x*as+z*ac),bRadius=bhw*Math.abs(x*bc-z*bs)+bhl*Math.abs(x*bs+z*bc);
+      if(distance>=aRadius+bRadius)return false
+    }
+    return true
+  }
+  vehicleAtStartIsBlocked(vehicle){return this.activeVehicles().some(other=>other!==vehicle&&this.vehiclesOverlap(vehicle,vehicle.group.position,vehicle.group.rotation.y,other))}
+  canVehicleAdvance(vehicle,step){
+    const previousBlocker=vehicle.blockedByVehicle;vehicle.blockedByPlayer=false;vehicle.blockedByVehicle=null;
+    // Последние метры перед колонкой — отдельная безопасная зона: машина ждёт снаружи,
+    // пока игрок не освободит всё парковочное место, а не только точку под центром кузова.
+    if(this.player&&vehicle.status===VEHICLE_STATE.ENTERING&&vehicle.path.len-vehicle.dist<SAFE_APPROACH&&this.playerInStopZone(vehicle)){vehicle.blockedByPlayer=true;return false}
+    if(this.player&&this.pointInVehicle(this.player.position.x,this.player.position.z,vehicle,PLAYER_RADIUS+SAFE_MARGIN,step.position,step.rotationY)){vehicle.blockedByPlayer=true;return false}
+    // Средняя точка шага закрывает щель между кадрами при низком FPS и на крутом повороте.
+    const mid={x:(step.from.x+step.position.x)/2,z:(step.from.z+step.position.z)/2};
+    const turn=Math.atan2(Math.sin(step.rotationY-vehicle.group.rotation.y),Math.cos(step.rotationY-vehicle.group.rotation.y));
+    if(this.player&&this.pointInVehicle(this.player.position.x,this.player.position.z,vehicle,PLAYER_RADIUS+SAFE_MARGIN,mid,vehicle.group.rotation.y+turn/2)){vehicle.blockedByPlayer=true;return false}
+    // Небольшой гистерезис удерживает тормоз, пока впереди действительно не освободится зазор.
+    if(previousBlocker&&this.activeVehicles().includes(previousBlocker)&&this.vehiclesOverlap(vehicle,vehicle.group.position,vehicle.group.rotation.y,previousBlocker,VEHICLE_MARGIN+.36)){vehicle.blockedByVehicle=previousBlocker;return false}
+    const other=this.activeVehicles().find(v=>v!==vehicle&&(this.vehiclesOverlap(vehicle,step.position,step.rotationY,v)||this.vehiclesOverlap(vehicle,mid,vehicle.group.rotation.y+turn/2,v)));
+    if(other){vehicle.blockedByVehicle=other;return false}return true
+  }
+  resolvePlayerOverlap(vehicle,dt){
+    if(!this.player||!this.pointInVehicle(this.player.position.x,this.player.position.z,vehicle,PLAYER_RADIUS))return;
+    const p=this.player.position,vp=vehicle.group.position,a=vehicle.group.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=p.x-vp.x,dz=p.z-vp.z,lx=dx*c-dz*s,lz=dx*s+dz*c;
+    const hx=vehicle.halfWidth+PLAYER_RADIUS+.04,hz=vehicle.halfLength+PLAYER_RADIUS+.04;
+    const exits=[[Math.sign(lx)||1,hx,lz],[-(Math.sign(lx)||1),hx,lz],[lx,Math.sign(lz)||1,hz],[lx,-(Math.sign(lz)||1),hz]].map(([axis,bound,other],i)=>{
+      const tx=i<2?axis*bound:THREE.MathUtils.clamp(axis,-hx,hx),tz=i<2?THREE.MathUtils.clamp(other,-hz,hz):other*bound;
+      return {x:vp.x+tx*c+tz*s,z:vp.z-tx*s+tz*c,d:Math.hypot(tx-lx,tz-lz)}
+    }).sort((a,b)=>a.d-b.d);
+    const target=exits.find(q=>!this.isBlocked(q.x,q.z,vehicle));if(!target)return;
+    const mx=target.x-p.x,mz=target.z-p.z,len=Math.hypot(mx,mz)||1,step=Math.min(len,3.2*dt);
+    const nx=p.x+mx/len*step,nz=p.z+mz/len*step;if(!this.isBlocked(nx,nz,vehicle)){p.x=nx;p.z=nz}
   }
   updateCars(dt){
     for(const c of [...this.cars]){
-      if(c.status==='arriving'){if(drive(c,dt)){c.status='fuel';c.speed=0;c.lights.set({brake:false,beam:false,reverse:false});this.addFuelJob(c)}}
-      else if(c.status==='reversing'){if(drive(c,dt)){c.status='shifting';c.wait=.55;c.speed=0;c.lights.set({brake:true,beam:false,reverse:true})}}
-      else if(c.status==='shifting'){c.wait-=dt;if(c.wait<=0){c.status='leaving';setPath(c,exitPath(c.slotX,SLOT_Z,c.side),11.5);audio.tone(96,.5,'sawtooth',.07)}}
-      else if(c.status==='leaving'){if(drive(c,dt))this.despawn(c,this.cars)}
+      if(c.status===VEHICLE_STATE.ENTERING){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){c.status=VEHICLE_STATE.WAITING;c.phase='parked';c.speed=0;c.lights.set({brake:false,beam:false,reverse:false});this.addFuelJob(c)}}
+      else if(c.status===VEHICLE_STATE.LEAVING){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){if(c.phase==='reversing'){c.phase='exiting';setPath(c,exitPath(c.slotX,SLOT_Z,c.side),11.5);audio.tone(96,.5,'sawtooth',.07)}else this.despawn(c,this.cars)}}
     }
     const v=this.specialVan;
     if(v){
-      if(v.status==='arriving'){if(drive(v,dt)){v.status='waiting';v.speed=0;v.lights.set({brake:false,beam:false,reverse:false});this.addJob({title:'Проверьте странный фургон',sub:'Водитель молчит и не открывает окно',pos:()=>v.group.position,duration:2.8,patience:40,onComplete:()=>{this.state.money+=90;this.state.rep=Math.min(5,this.state.rep+.1);this.eventNotice('…','Внутри никого','На сиденье лежал чек с завтрашней датой. Вы получили ₽90.');audio.spooky();this.leaveSpecialVan()}})}}
-      else if(v.status==='reversing'){if(drive(v,dt)){v.status='shifting';v.wait=.6;v.speed=0}}
-      else if(v.status==='shifting'){v.wait-=dt;if(v.wait<=0){v.status='leaving';setPath(v,exitPath(VAN_SLOT.x,VAN_SLOT.z,-1),10)}}
-      else if(v.status==='leaving'){if(drive(v,dt)){this.despawn(v);this.specialVan=null}}
+      if(v.status===VEHICLE_STATE.ENTERING){this.resolvePlayerOverlap(v,dt);if(drive(v,dt)){v.status=VEHICLE_STATE.WAITING;v.phase='parked';v.speed=0;v.lights.set({brake:false,beam:false,reverse:false});this.addJob({title:'Проверьте странный фургон',sub:'Водитель молчит и не открывает окно',pos:()=>v.group.position,duration:2.8,patience:40,onComplete:()=>{this.state.money+=90;this.state.rep=Math.min(5,this.state.rep+.1);this.eventNotice('…','Внутри никого','На сиденье лежал чек с завтрашней датой. Вы получили ₽90.');audio.spooky();this.leaveSpecialVan()}})}}
+      else if(v.status===VEHICLE_STATE.LEAVING){this.resolvePlayerOverlap(v,dt);if(drive(v,dt)){if(v.phase==='reversing'){v.phase='exiting';setPath(v,exitPath(VAN_SLOT.x,VAN_SLOT.z,-1),10)}else{this.despawn(v);this.specialVan=null}}}
     }
     for(const t of [...this.traffic])if(drive(t,dt))this.despawn(t,this.traffic);
   }
@@ -157,9 +202,9 @@ class NightStationGame{
     this.trafficTimer=9+Math.random()*13;
     const side=Math.random()<.5?-1:1,group=this.assets.car.clone(true);
     this.paintCar(group);this.scene.add(group);
-    const t={group,lights:addLights(group)};
-    setPath(t,passPath(side),13+Math.random()*4);
-    t.speed=12;this.traffic.push(t);
+    const t={group,lights:addLights(group),halfWidth:1.18,halfLength:2.2,status:'passing',phase:'highway'};t.canAdvance=step=>this.canVehicleAdvance(t,step);
+    let placed=false;for(const from of[side,-side]){setPath(t,passPath(from),13+Math.random()*4);if(!this.vehicleAtStartIsBlocked(t)){placed=true;break}}
+    if(!placed){this.despawn(t);this.trafficTimer=2;return}t.speed=12;this.traffic.push(t);
   }
   paintCar(group){
     const colors=[0xb52f28,0x2e6380,0xd0a343,0x4f555b,0x315d3f,0x8d8f92,0x2a2f35];
@@ -176,22 +221,24 @@ class NightStationGame{
     const pump=this.pumps.find(p=>!p.car&&!p.broken);if(!pump)return;
     const group=this.assets.car.clone(true),side=Math.sign(pump.x),from=Math.random()<.5?-1:1;
     this.paintCar(group);this.scene.add(group);
-    const c={group,pump,status:'arriving',side,slotX:pump.slotX,t:0,lights:addLights(group),
+    const c={group,pump,status:VEHICLE_STATE.ENTERING,phase:'approaching',side,slotX:pump.slotX,t:0,lights:addLights(group),halfWidth:1.18,halfLength:2.2,
       spot:new THREE.Vector3(pump.x+side*1.25,.25,SLOT_Z),
-      target:new THREE.Vector3(pump.slotX,ROAD.y,pump.z),patience:46-Math.min(12,this.state.shift*1.2)};
-    setPath(c,entryPath(pump.slotX,SLOT_Z,from,laneFor(-from)),11);
+      target:new THREE.Vector3(pump.slotX,ROAD.y,pump.z),safeZone:{x:pump.slotX,z:pump.z,halfWidth:1.18+PLAYER_RADIUS+SAFE_MARGIN,halfLength:2.2+PLAYER_RADIUS+SAFE_MARGIN},patience:46-Math.min(12,this.state.shift*1.2)};
+    c.canAdvance=step=>this.canVehicleAdvance(c,step);
+    let placed=false;for(const direction of[from,-from]){setPath(c,entryPath(pump.slotX,SLOT_Z,direction,laneFor(-direction)),11);if(!this.vehicleAtStartIsBlocked(c)){placed=true;break}}
+    if(!placed){this.despawn(c);return}
     c.speed=10;pump.car=c;this.cars.push(c);audio.tone(105,.35,'sawtooth',.12);
   }
   addFuelJob(car){
-    car.job=this.addJob({car,title:'Заправьте машину',sub:`Колонка ${this.pumps.indexOf(car.pump)+1} · бензин АИ-95`,pos:()=>car.spot,duration:2.7,patience:car.patience,onFail:()=>this.loseCustomer(car),onComplete:()=>{const gain=75+this.state.shift*4;this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);if(Math.random()<.62)this.createOrder(car);else{this.served++;setTimeout(()=>this.leaveCar(car),800)}}})
+    car.job=this.addJob({car,kind:'fuel',title:'Заправьте машину',sub:`Колонка ${this.pumps.indexOf(car.pump)+1} · бензин АИ-95`,pos:()=>car.spot,duration:2.7,patience:car.patience,onFail:()=>this.loseCustomer(car),onComplete:()=>{car.status=VEHICLE_STATE.WAITING;const gain=75+this.state.shift*4;this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);if(Math.random()<.62)this.createOrder(car);else{this.served++;setTimeout(()=>this.leaveCar(car),800)}}})
   }
   createOrder(car){
-    car.status='order';const kind=Math.random()<.58?'coffee':'snack',isCoffee=kind==='coffee',source=isCoffee?new THREE.Vector3(-1.75,.2,-.7):new THREE.Vector3(3.55,.2,2.5),name=isCoffee?'кофе':'сэндвич';
+    car.status=VEHICLE_STATE.WAITING;const kind=Math.random()<.58?'coffee':'snack',isCoffee=kind==='coffee',source=isCoffee?new THREE.Vector3(-1.75,.2,-.7):new THREE.Vector3(3.55,.2,2.5),name=isCoffee?'кофе':'сэндвич';
     this.addJob({car,title:`Приготовьте ${name}`,sub:`Заказ с колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>source,duration:isCoffee?1.5:1.05,patience:32,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands())return false;if(!isCoffee&&this.stock<=0){this.toast('Полка пуста — возьмите коробку на складе');this.createRestockJob();return false}if(!isCoffee)this.stock--;this.carry=kind;this.updateCarry();audio.tone(620,.12,'square',.14);this.addJob({car,title:`Отнесите ${name}`,sub:`К машине у колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:.7,patience:24,onFail:()=>{this.carry=null;this.updateCarry();this.loseCustomer(car)},onComplete:()=>{if(this.carry!==kind)return false;this.carry=null;this.updateCarry();const gain=(isCoffee?55+this.state.upgrades.coffee*15:48);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.08);this.served++;audio.success();this.toast(`Заказ выдан <b>+₽${gain}</b>`);this.leaveCar(car);if(this.stock<=2)this.createRestockJob()}})}})
   }
   createRestockJob(){if(this.jobs.some(j=>j.tag==='restock-pick'||j.tag==='restock-put'))return;this.addJob({tag:'restock-pick',title:'Возьмите коробку товара',sub:'Склад в дальнем углу магазина',pos:()=>new THREE.Vector3(4.1,.2,4.1),duration:1.1,onComplete:()=>{if(!this.freeHands())return false;this.carry='box';this.updateCarry();this.addJob({tag:'restock-put',title:'Пополните полку',sub:'Поставьте коробку на стеллаж',pos:()=>new THREE.Vector3(3.55,.2,2.5),duration:1.6,onComplete:()=>{if(this.carry!=='box')return false;this.carry=null;this.stock=6;this.updateCarry();this.state.money+=20;this.toast('Товар расставлен <b>+₽20</b>');audio.success()}})}})}
-  leaveCar(car){if(!car||['reversing','shifting','leaving'].includes(car.status))return;this.jobs.filter(j=>j.car===car).forEach(j=>this.removeJob(j));car.status='reversing';setPath(car,reversePath(car.slotX,SLOT_Z,car.side),2.9);audio.tone(78,.45,'sine',.07)}
-  loseCustomer(car){if(!car||['reversing','shifting','leaving'].includes(car.status))return;this.state.rep=Math.max(1,this.state.rep-.22);this.toast('<b>Клиент уехал недовольным</b>');audio.fail();this.leaveCar(car)}
+  leaveCar(car){if(!car||car.status===VEHICLE_STATE.LEAVING)return;this.jobs.filter(j=>j.car===car).forEach(j=>this.removeJob(j));car.status=VEHICLE_STATE.LEAVING;car.phase='reversing';setPath(car,reversePath(car.slotX,SLOT_Z,car.side),2.9);audio.tone(78,.45,'sine',.07)}
+  loseCustomer(car){if(!car||car.status===VEHICLE_STATE.LEAVING)return;this.state.rep=Math.max(1,this.state.rep-.22);this.toast('<b>Клиент уехал недовольным</b>');audio.fail();this.leaveCar(car)}
   addJob(spec){const job={id:++this.jobId,created:this.elapsed,duration:1,patience:null,maxPatience:null,...spec};if(job.patience)job.maxPatience=job.patience;this.jobs.push(job);return job}
   removeJob(job){const i=this.jobs.indexOf(job);if(i>=0)this.jobs.splice(i,1);if(job.visual)this.scene.remove(job.visual);if(this.nearest===job){this.nearest=null;this.actionProgress=0}}
   updateJobs(dt){for(const j of [...this.jobs]){if(j.patience!=null){j.patience-=dt;if(j.patience<=0){this.removeJob(j);j.onFail?.()}}}this.renderTasks()}
@@ -201,6 +248,8 @@ class NightStationGame{
     if(nearest!==this.nearest){this.nearest=nearest;this.actionProgress=0}
     const missing=nearest&&nearest.need&&this.carry!==nearest.need?nearest.need:null;
     this.marker.visible=!!nearest;if(nearest){const p=nearest.pos();this.marker.position.x=p.x;this.marker.position.z=p.z;ui.prompt.classList.remove('hidden');ui.promptKey.textContent=isTouch?'●':'E';ui.promptTitle.textContent=this.jobLabel(nearest);ui.promptSub.textContent=missing?NEED_HINT[missing]:'Удерживайте для действия'}else ui.prompt.classList.add('hidden');
+    for(const car of this.cars)if(car.status===VEHICLE_STATE.FUELING&&(nearest?.kind!=='fuel'||nearest.car!==car||!this.actionHeld||missing||this.actionLatched))car.status=VEHICLE_STATE.WAITING;
+    if(nearest?.kind==='fuel'&&nearest.car?.status!==VEHICLE_STATE.LEAVING)nearest.car.status=this.actionHeld&&!missing&&!this.actionLatched?VEHICLE_STATE.FUELING:VEHICLE_STATE.WAITING;
     if(nearest&&this.actionHeld&&!missing&&!this.actionLatched){this.actionProgress+=dt*(1+this.state.upgrades.service*.15);ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);ui.progress.classList.add('hidden')}
   }
   triggerEvent(){
@@ -214,12 +263,14 @@ class NightStationGame{
   eventBrokenPump(){const p=this.pumps[Math.floor(Math.random()*this.pumps.length)];if(p.broken||p.car){this.spawnSpill();return}p.broken=true;this.eventNotice('⚙','Заклинило колонку','Пахнет проводкой, но искр пока нет. Ящик с инструментом стоит в магазине.');this.addJob({tag:'broken',need:'tools',title:`Почините колонку ${this.pumps.indexOf(p)+1}`,sub:'Ящик с инструментом стоит в магазине',pos:()=>new THREE.Vector3(p.x,.2,p.z),duration:3.1,onComplete:()=>{p.broken=false;this.state.money+=65;this.toast('Колонка снова работает <b>+₽65</b>');audio.success();this.stowTool()}})}
   eventVan(){
     const group=this.assets.mystery_van.clone(true);this.scene.add(group);
-    const v={group,status:'arriving',t:0,lights:addLights(group,{front:-2.55,back:2.52,width:.7,y:.58,dark:true})};
-    setPath(v,entryPath(VAN_SLOT.x,VAN_SLOT.z,1,laneFor(-1)),8);v.speed=7;
+    const v={group,status:VEHICLE_STATE.ENTERING,phase:'approaching',t:0,lights:addLights(group,{front:-2.55,back:2.52,width:.7,y:.58,dark:true}),halfWidth:1.28,halfLength:2.5,safeZone:{x:VAN_SLOT.x,z:VAN_SLOT.z,halfWidth:1.28+PLAYER_RADIUS+SAFE_MARGIN,halfLength:2.5+PLAYER_RADIUS+SAFE_MARGIN}};
+    v.canAdvance=step=>this.canVehicleAdvance(v,step);
+    let placed=false;for(const direction of[1,-1]){setPath(v,entryPath(VAN_SLOT.x,VAN_SLOT.z,direction,laneFor(-direction)),8);if(!this.vehicleAtStartIsBlocked(v)){placed=true;break}}
+    if(!placed){this.despawn(v);this.eventTimer=Math.min(this.eventTimer,3);return}v.speed=7;
     v.lights.set({beam:false,brake:false,reverse:false});this.specialVan=v;
     this.eventNotice('◉','Подозрительный фургон','Он подъехал без фар. Номер заляпан чем-то похожим на пепел.');audio.spooky()
   }
-  leaveSpecialVan(){const v=this.specialVan;if(!v||v.status!=='waiting')return;v.status='reversing';setPath(v,reversePath(VAN_SLOT.x,VAN_SLOT.z,-1),2.6)}
+  leaveSpecialVan(){const v=this.specialVan;if(!v||v.status!==VEHICLE_STATE.WAITING)return;v.status=VEHICLE_STATE.LEAVING;v.phase='reversing';setPath(v,reversePath(VAN_SLOT.x,VAN_SLOT.z,-1),2.6)}
   eventWhisper(){this.eventNotice('♫','Радио поймало помеху','Сквозь шум кто-то назвал ваше имя. Наверное, дальнобойщики шутят.');audio.spooky();const old=this.scene.fog.color.clone();this.scene.fog.color.set(0x160b20);setTimeout(()=>this.scene.fog.color.copy(old),7000)}
   eventNotice(icon,title,text){ui.event.classList.add('hidden');void ui.event.offsetWidth;ui.eventIcon.textContent=icon;ui.eventTitle.textContent=title;ui.eventText.textContent=text;ui.event.classList.remove('hidden');setTimeout(()=>ui.event.classList.add('hidden'),5300)}
   updateCarry(){ui.carrying.classList.toggle('hidden',!this.carry);$('#carrying b').textContent=CARRY_NAMES[this.carry]||'';this.hands.set(this.carry)}
