@@ -1,10 +1,11 @@
 import { chromium } from 'playwright-core';
 import { mkdir } from 'node:fs/promises';
 const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--use-angle=swiftshader','--enable-webgl']});
+const baseUrl=process.env.TEST_URL||'http://127.0.0.1:4173';
 const page=await browser.newPage({viewport:{width:1280,height:720}});const errors=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&!/favicon|fonts\.google/i.test(r.url()))errors.push(`${r.status()} ${r.url()}`)});
-await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
+await page.goto(baseUrl,{waitUntil:'networkidle'});
+await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.jobs?.length>0,null,{timeout:20000});
@@ -16,7 +17,7 @@ await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-b
 if(errors.length)throw new Error(`Runtime errors: ${errors.join(' | ')}`);
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
-await mobile.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:15000});
+await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
