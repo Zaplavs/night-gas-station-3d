@@ -1,0 +1,18 @@
+import { chromium } from 'playwright-core';
+import { mkdir } from 'node:fs/promises';
+const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--use-angle=swiftshader','--enable-webgl']});
+const page=await browser.newPage({viewport:{width:1920,height:1080}});await mkdir('promo/screenshots',{recursive:true});await mkdir('public/tutorial',{recursive:true});
+await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
+await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility='hidden'));await page.screenshot({path:'promo/cover-1920x1080.png'});
+await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility=''));
+await page.setViewportSize({width:1280,height:720});await page.click('#new-btn');await page.click('#tutorial-start');
+await page.waitForFunction(()=>window.__nightStation?.jobs?.length>0,null,{timeout:20000});await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/01-service.png'});await page.screenshot({path:'public/tutorial/01-controls.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-4);g.yaw=.52;g.pitch=-.08;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'public/tutorial/02-pumps.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-2.75);g.yaw=Math.PI;g.pitch=-.05;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'public/tutorial/03-shop.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-5);g.yaw=Math.PI;g.pitch=-.04;g.eventBag();g.updatePlayer(0)});await page.waitForTimeout(300);await page.screenshot({path:'public/tutorial/04-events.png'});
+await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/02-forgotten-bag.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-6);g.yaw=Math.PI;g.pitch=.26;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'promo/screenshots/05-signage.png'});
+await page.evaluate(()=>window.__nightStation.eventBlackout());await page.waitForTimeout(500);await page.screenshot({path:'promo/screenshots/03-blackout.png'});
+await page.evaluate(()=>window.__nightStation.eventVan());await page.waitForTimeout(1200);await page.screenshot({path:'promo/screenshots/04-strange-van.png'});
+await page.setViewportSize({width:1024,height:1024});await page.evaluate(()=>{const g=window.__nightStation;document.querySelectorAll('body > *:not(#game)').forEach(e=>e.style.display='none');g.mode='capture';g.updateMenu=()=>{};g.scene.traverse(o=>{if(['RoadSign','RoadSign24','ShopSign','ShopSign24'].includes(o.name))o.visible=false});g.camera.fov=34;g.camera.updateProjectionMatrix();g.camera.position.set(8,6,-13);g.camera.lookAt(1.5,1,-6.8);g.renderer.render(g.scene,g.camera)});await page.waitForTimeout(300);await page.locator('#scene').screenshot({path:'promo/icon-1024x1024.png'});
+console.log('Captured icon, cover, tutorial screens and five gameplay screenshots.');await browser.close();

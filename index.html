@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#071015" />
+  <meta name="description" content="Ночная заправка 3D — уютный симулятор ночной смены с необычными посетителями." />
+  <title>Ночная заправка 3D</title>
+</head>
+<body>
+  <div id="game"><canvas id="scene" aria-label="Игровая сцена"></canvas></div>
+  <div id="vignette"></div>
+
+  <header id="hud" class="hidden">
+    <div class="brand"><span class="brand-dot"></span><b>НОЧНАЯ ЗАПРАВКА</b><small id="shift-label">СМЕНА 1</small></div>
+    <div class="hud-stats">
+      <div class="stat money"><span>₽</span><b id="money">0</b></div>
+      <div class="stat"><span>★</span><b id="reputation">3.0</b></div>
+      <div class="stat clock"><span>◷</span><b id="clock">00:00</b></div>
+    </div>
+    <div class="hud-actions">
+      <button id="guide-btn" class="guide-btn" aria-label="Краткое обучение">? <span>ОБУЧЕНИЕ</span></button>
+      <button id="pause-btn" class="icon-btn" aria-label="Пауза">Ⅱ</button>
+    </div>
+  </header>
+
+  <aside id="tasks" class="hidden">
+    <div class="eyebrow">ТЕКУЩИЕ ДЕЛА</div>
+    <div id="task-list"></div>
+  </aside>
+
+  <div id="prompt" class="hidden">
+    <div id="prompt-key">E</div>
+    <div><b id="prompt-title">Взаимодействовать</b><small id="prompt-subtitle"></small></div>
+  </div>
+  <div id="progress" class="hidden"><i></i></div>
+  <div id="toast-zone" aria-live="polite"></div>
+  <div id="carrying" class="hidden">В руках: <b></b></div>
+  <div id="crosshair" class="hidden"><i></i><i></i><i></i><i></i></div>
+  <div id="look-hint" class="hidden">КЛИКНИТЕ ПО ИГРЕ, ЧТОБЫ ОСМАТРИВАТЬСЯ</div>
+
+  <div id="mobile-controls" class="hidden">
+    <div id="joystick"><i></i></div>
+    <button id="action-btn"><span>ДЕЙСТВИЕ</span></button>
+  </div>
+
+  <section id="loading" class="screen">
+    <div class="loading-mark"><span></span><span></span><span></span></div>
+    <h1>НОЧНАЯ<br><em>ЗАПРАВКА</em> 3D</h1>
+    <p id="loading-text">Зажигаем вывеску…</p>
+    <div class="loadbar"><i id="load-fill"></i></div>
+  </section>
+
+  <section id="menu" class="screen hidden">
+    <div class="menu-card">
+      <p class="eyebrow">ТРАССА М-13 · 02:47</p>
+      <h1>НОЧНАЯ<br><em>ЗАПРАВКА</em></h1>
+      <p class="lead">Обычная работа. Необычные посетители.<br>Главное — дотянуть до рассвета.</p>
+      <div class="menu-actions">
+        <button id="continue-btn" class="primary">ПРОДОЛЖИТЬ СМЕНУ <span>→</span></button>
+        <button id="new-btn" class="secondary">НОВАЯ ИГРА</button>
+      </div>
+      <div class="controls-hint"><span><kbd>WASD</kbd> двигаться</span><span><kbd>E</kbd> действие</span><span><kbd>Shift</kbd> бег</span></div>
+    </div>
+    <div class="road-number">24/7</div>
+  </section>
+
+  <section id="tutorial" class="screen modal-screen hidden">
+    <div class="dialog tutorial-card">
+      <span class="step">ПЕРВАЯ СМЕНА</span>
+      <h2>Добро пожаловать<br>на ночную.</h2>
+      <div class="tutorial-grid">
+        <div><b>01</b><span>Осматривайся мышью и ходи на <strong>WASD</strong></span></div>
+        <div><b>02</b><span>Подойди к цели и удерживай <strong>E</strong></span></div>
+        <div><b>03</b><span>Кнопка <strong>«Обучение»</strong> всегда покажет карту</span></div>
+      </div>
+      <p>Здесь бывает странно, но по-настоящему опасно — почти никогда.</p>
+      <button id="tutorial-start" class="primary">ОТКРЫТЬ СМЕНУ <span>→</span></button>
+    </div>
+  </section>
+
+  <section id="guide" class="screen modal-screen hidden">
+    <div class="dialog guide-card">
+      <div class="guide-top"><p class="eyebrow">КРАТКОЕ ОБУЧЕНИЕ</p><button id="guide-close" aria-label="Закрыть">×</button></div>
+      <div class="guide-media"><img id="guide-image" src="tutorial/01-controls.png" alt="Подсказка по игре"></div>
+      <div class="guide-copy"><span id="guide-step">1 / 4</span><h2 id="guide-title">Как двигаться</h2><p id="guide-text">Кликните по игре и осматривайтесь мышью. WASD — движение, Shift — бег, E — действие.</p></div>
+      <div class="guide-nav"><button id="guide-prev" class="secondary">← НАЗАД</button><div id="guide-dots"></div><button id="guide-next" class="primary">ДАЛЬШЕ →</button></div>
+    </div>
+  </section>
+
+  <section id="pause" class="screen modal-screen hidden">
+    <div class="dialog small-dialog">
+      <p class="eyebrow">ПЕРЕРЫВ</p><h2>Смена на паузе</h2>
+      <button id="resume-btn" class="primary">ПРОДОЛЖИТЬ</button>
+      <button id="sound-btn" class="secondary">ЗВУК: ВКЛ</button>
+      <button id="menu-btn" class="text-btn">В главное меню</button>
+    </div>
+  </section>
+
+  <section id="event-card" class="event-card hidden">
+    <div class="event-icon" id="event-icon">!</div>
+    <div><span>НОЧНОЕ СОБЫТИЕ</span><h3 id="event-title"></h3><p id="event-text"></p></div>
+  </section>
+
+  <section id="results" class="screen modal-screen hidden">
+    <div class="dialog results-card">
+      <p class="eyebrow">РАССВЕТ · СМЕНА ЗАКРЫТА</p>
+      <h2 id="result-title">Неплохая ночка.</h2>
+      <div class="result-row"><div><small>ЗАРАБОТАНО</small><b id="result-money">₽0</b></div><div><small>ОБСЛУЖЕНО</small><b id="result-served">0</b></div><div><small>РЕПУТАЦИЯ</small><b id="result-rep">3.0★</b></div></div>
+      <div class="upgrades">
+        <p>УЛУЧШЕНИЯ НА СЛЕДУЮЩУЮ СМЕНУ</p>
+        <button data-upgrade="speed"><span>Быстрые кроссовки<small>Скорость +12%</small></span><b>₽200</b></button>
+        <button data-upgrade="service"><span>Хороший инструмент<small>Действия +15%</small></span><b>₽250</b></button>
+        <button data-upgrade="coffee"><span>Зёрна получше<small>Кофе дороже на ₽15</small></span><b>₽180</b></button>
+      </div>
+      <button id="reward-btn" class="secondary hidden">УДВОИТЬ ЧАЕВЫЕ ЗА РЕКЛАМУ</button>
+      <button id="next-shift" class="primary">СЛЕДУЮЩАЯ СМЕНА <span>→</span></button>
+    </div>
+  </section>
+
+  <script>window.GAMEPUSH_CONFIG = { projectId: '', publicToken: '', saveField: 'night_station_save' };</script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
