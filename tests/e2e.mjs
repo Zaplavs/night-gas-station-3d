@@ -8,11 +8,87 @@ await page.goto(baseUrl,{waitUntil:'networkidle'});
 await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
-await page.waitForFunction(()=>window.__nightStation?.jobs?.length>0,null,{timeout:20000});
-const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>j.title)}));
+await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='fuel'),null,{timeout:45000});
+const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
 const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(-3.75,-1.45)&&!g.isBlocked(-3.75,.3),carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
+const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
+  for(const index of [0,1]){
+    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.jobs=g.jobs.filter(j=>j.hidden);
+    g.pumps.forEach((p,i)=>{p.car=i===index?null:{};p.broken=false});
+    g.spawnCar();const car=g.cars[0];
+    if(!car){out.push({index,parked:false});continue}
+    for(let i=0;i<900&&car.status==='arriving';i++)g.updateCars(.05);
+    let spot=null;
+    for(let z=-3;z>=-12&&!spot;z-=.1){const x=car.pump.x;if(g.isBlocked(x,z))continue;
+      g.player.position.set(x,.26,z);g.updateInteraction(0);
+      if(g.nearest&&g.nearest.car===car)spot={x,z}}
+    let paid=0;
+    if(spot){const before=g.state.money;g.player.position.set(spot.x,.26,spot.z);g.updateInteraction(0);
+      g.actionLatched=false;g.actionHeld=true;
+      for(let i=0;i<200&&paid<=0;i++){g.updateInteraction(.05);paid=g.state.money-before}
+      g.actionHeld=false;g.actionLatched=false}
+    out.push({index,parked:car.status!=='arriving',reachable:!!spot,paid:paid>0});
+  }
+  g.pumps.forEach(p=>{p.car=null});return out;});
+if(service.some(r=>!r.parked||!r.reachable||!r.paid))throw new Error(`Refuelling is not reachable from the pump: ${JSON.stringify(service)}`);
+const onRoad=p=>Math.abs(p.x)>40&&p.z<-12.4&&p.z>-21.6;
+const road=await page.evaluate(()=>{const g=window.__nightStation;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0];
+  for(let i=0;i<900&&c.status==='arriving';i++)g.updateCars(.05);
+  const start=c.path.curve.getPointAt(0),end=c.path.curve.getPointAt(1);
+  c.status='fuel';g.leaveCar(c);let reversedFirst=c.status==='reversing',left=false;
+  for(let i=0;i<500&&!left;i++){g.updateCars(.05);left=c.status==='leaving'}
+  const exit=left?c.path.curve.getPointAt(1):null;
+  return {start:{x:start.x,z:start.z},parked:{x:end.x,z:end.z},slot:{x:c.target.x,z:c.target.z},reversedFirst,left,exit:exit&&{x:exit.x,z:exit.z}};});
+const roadChecks={arrivesFromRoad:onRoad(road.start),parksAtPump:Math.hypot(road.parked.x-road.slot.x,road.parked.z-road.slot.z)<.1,
+  reversesOut:road.reversedFirst,leavesOnRoad:road.left&&onRoad(road.exit)};
+if(Object.values(roadChecks).some(v=>!v))throw new Error(`Car road routing failed: ${JSON.stringify(roadChecks)} ${JSON.stringify(road)}`);
+const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
+  for(const item of ['coffee','box','mop','tools','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
+  g.carry=null;g.updateCarry();seen.emptyHidden=!g.hands.rig.visible;
+  g.carry='coffee';g.updateCarry();g.hands.update(.016,{moving:true,acting:true,yawDelta:.01,pitchDelta:0});
+  seen.animates=Number.isFinite(g.hands.items.coffee.position.z);return seen;});
+if(Object.values(handChecks).some(v=>!v))throw new Error(`Hand item checks failed: ${JSON.stringify(handChecks)}`);
+const chores=await page.evaluate(()=>{const g=window.__nightStation;
+  const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++){g.updateInteraction(.05)}g.actionHeld=false;g.actionLatched=false;return check()};
+  const goTo=p=>{g.player.position.set(p.x,.26,p.z+.9);g.updateInteraction(0)};
+  const out={};
+  g.carry=null;g.updateCarry();
+  g.spawnSpill();
+  const spill=g.jobs.find(j=>j.tag==='spill');
+  out.spillNeedsMop=!!spill&&spill.need==='mop';
+  goTo(spill.pos());
+  out.blockedWithoutMop=!hold(()=>!g.jobs.includes(spill),40);
+  goTo({x:-3.7,z:-3.25});
+  out.tookMop=hold(()=>g.carry==='mop');
+  out.mopLeftTheStand=g.kitMop.every(m=>!m.visible);
+  goTo(spill.pos());
+  out.cleaned=hold(()=>!g.jobs.includes(spill));
+  out.mopIsBack=g.carry===null&&g.kitMop.every(m=>m.visible);
+  g.pumps.forEach(p=>{p.car=null;p.broken=false});
+  g.eventBrokenPump();
+  const repair=g.jobs.find(j=>j.tag==='broken');
+  out.pumpNeedsTools=!!repair&&repair.need==='tools';
+  goTo({x:-4.28,z:-.45});
+  out.tookTools=hold(()=>g.carry==='tools');
+  goTo(repair.pos());
+  out.repaired=hold(()=>!g.jobs.includes(repair))&&g.pumps.every(p=>!p.broken);
+  out.toolsAreBack=g.carry===null;
+  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===2&&!g.jobs.some(j=>j.hidden&&!j.tag.startsWith('stand'));
+  return out;});
+if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
+const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();
+  const start=g.specialVan.path.curve.getPointAt(0);
+  for(let i=0;i<600&&g.specialVan.status==='arriving';i++)g.updateCars(.05);
+  const parked=g.specialVan.status==='waiting'&&!!g.jobs.find(j=>j.title==='Проверьте странный фургон');
+  g.leaveSpecialVan();
+  for(let i=0;i<900&&g.specialVan;i++)g.updateCars(.05);
+  return {fromRoad:Math.abs(start.x)>40&&start.z<-12.4&&start.z>-21.6,parked,gone:!g.specialVan};});
+if(Object.values(van).some(v=>!v))throw new Error(`Mystery van routing failed: ${JSON.stringify(van)}`);
+await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffee';g.updateCarry()});
 await mkdir('artifacts',{recursive:true});await page.waitForTimeout(400);await page.screenshot({path:'artifacts/gameplay.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.carry='mop';g.updateCarry()});await page.waitForTimeout(500);await page.screenshot({path:'artifacts/hands.png'});await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
 await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 4')throw new Error('Guide navigation failed');await page.click('#guide-close');
 if(errors.length)throw new Error(`Runtime errors: ${errors.join(' | ')}`);
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -21,4 +97,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: first-person controls, collisions, car lanes, guide and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: first-person controls, collisions, road arrival/departure, items in hands, guide and desktop/mobile UI are working.');await browser.close();
