@@ -127,9 +127,13 @@ function fuelHose(){
   put(g,cyl('nozzleSpout',.018,.022,.31,8),steel,0,.075,-.25,Math.PI/2,0,0);
   put(g,cyl('hoseTail',.028,.028,.42,8),rubber,.03,-.29,.13,-.48,0,0);
   const socket=new THREE.Object3D();socket.name='HoseSocket';socket.position.set(.03,-.1,.035);g.add(socket);g.userData.socket=socket;
+  const fuelMat=new THREE.MeshBasicMaterial({color:0xffc43d,transparent:true,opacity:.94,depthWrite:false}),flow=put(g,cyl('fuelStream',.009,.022,.32,7),fuelMat,0,.015,-.555,1.15),drops=[];
+  flow.name='FuelStream';flow.visible=false;
+  for(let i=0;i<5;i++){const drop=put(g,new THREE.IcosahedronGeometry(.014,0),fuelMat.clone(),0,-.05,-.72-i*.055);drop.name=`FuelDrop${i+1}`;drop.visible=false;drop.userData.offset=i/5;drops.push(drop)}
   const h=hand(1);h.position.set(.015,-.08,.06);h.rotation.set(.08,0,.2);g.add(h);
   g.position.set(.245,-.17,-.58);g.rotation.set(.12,-.22,-.08);
-  g.userData.anim=(o,t,use)=>{o.position.z=-.58+use*.13;o.rotation.x=.12-use*.28+Math.sin(t*1.5)*.018;o.rotation.y=-.22+use*.08};
+  g.userData.fuelFx={flow,drops};
+  g.userData.anim=(o,t,use,state)=>{o.position.z=-.58+use*.13;o.rotation.x=.12-use*.28+Math.sin(t*1.5)*.018;o.rotation.y=-.22+use*.08;const pouring=!!state.fueling;flow.visible=pouring;flow.scale.y=.92+Math.sin(t*18)*.08;drops.forEach((drop,i)=>{drop.visible=pouring;const p=(t*3.4+drop.userData.offset)%1;drop.position.set(Math.sin(t*11+i)*.012,-.045-p*.12,-.69-p*.3);drop.scale.setScalar(.7+p*.5);drop.material.opacity=.92*(1-p)})};
   return g;
 }
 
@@ -182,7 +186,7 @@ export class HandView{
     const amp=state.moving?1:.28,ease=1-Math.pow(1-this.raise,3);
     this.rig.position.set(this.sway.x+Math.cos(this.bob)*.013*amp,this.sway.y+Math.sin(this.bob*2)*.011*amp-(1-ease)*.5,0);
     this.rig.rotation.set(-this.sway.y*.7,this.sway.x*.8,this.sway.x*1.1);
-    item.userData.anim?.(item,this.time,this.use);
+    item.userData.anim?.(item,this.time,this.use,state);
   }
   render(renderer,aspect){
     if(!this.rig.visible)return;
