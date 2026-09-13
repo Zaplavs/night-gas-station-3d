@@ -4,21 +4,22 @@ import './style.css';
 import { AudioSystem } from './audio.js';
 import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, gpState, bindAdPause } from './gamepush.js';
 import { HandView } from './hands.js';
-import { ROAD, laneFor, entryPath, reversePath, exitPath, passPath, addLights, drive, setPath } from './traffic.js';
+import { ROAD, laneFor, entryPath, reversePath, exitPath, passPath, queuePoint, queueEntryPath, queueAdvancePath, queueToPumpPath, addLights, drive, setPath } from './traffic.js';
 import { createSky, MOON_DIRECTION } from './sky.js';
+import { CAMPAIGN_SHIFT_COUNT, PLAY_MODE, getShiftConfig, isFinalCampaignShift, randomFromRange } from './content/shifts.js';
+import { DEFAULT_PROGRESS, migrateProgress } from './content/progress.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const ui={
   loading:$('#loading'),loadFill:$('#load-fill'),loadText:$('#loading-text'),menu:$('#menu'),hud:$('#hud'),tasks:$('#tasks'),taskList:$('#task-list'),
   money:$('#money'),rep:$('#reputation'),clock:$('#clock'),shift:$('#shift-label'),prompt:$('#prompt'),promptKey:$('#prompt-key'),promptTitle:$('#prompt-title'),promptSub:$('#prompt-subtitle'),
   progress:$('#progress'),progressFill:$('#progress i'),toasts:$('#toast-zone'),carrying:$('#carrying'),event:$('#event-card'),eventIcon:$('#event-icon'),eventTitle:$('#event-title'),eventText:$('#event-text'),
-  tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
+  tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),campaignComplete:$('#campaign-complete'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
 };
 const audio=new AudioSystem();
-const SAVE_DEFAULT={money:0,shift:1,rep:3,upgrades:{speed:0,service:0,coffee:0},tutorial:false,sound:true,musicVolume:80,best:0};
 const isTouch=matchMedia('(pointer:coarse)').matches;
 const SLOT_Z=-7.4,SLOT_OFFSET=2.3,VAN_SLOT={x:7.6,z:-7.4};
-const VEHICLE_STATE=Object.freeze({ENTERING:'entering',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
+const VEHICLE_STATE=Object.freeze({ENTERING:'entering',QUEUEING:'queueing',APPROACHING_PUMP:'approachingPump',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
 const PLAYER_RADIUS=.36,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12;
 const EYE_HEIGHT=1.62,JUMP_SPEED=4.9,GRAVITY=16.5;
 const MOP_SPOT=new THREE.Vector3(0,.25,2.85),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
@@ -26,14 +27,22 @@ const COFFEE_SPOT=new THREE.Vector3(-1.75,.2,-.7),FOOD_SPOT=new THREE.Vector3(1.
 const STOW_NOTE={mop:'Швабра вернулась на место',tools:'Инструменты вернулись в ящик'};
 const NEED_HINT={mop:'Сначала возьмите швабру за прилавком',tools:'Сначала возьмите инструменты в магазине',hose:'Сначала снимите пистолет с нужной колонки'};
 const CARRY_NAMES={coffee:'Кофе',snack:'Сэндвич',box:'Коробка товара',bag:'Забытая сумка',mop:'Швабра',tools:'Инструменты',hose:'Заправочный пистолет'};
+// Реклама на экране результатов даёт надбавку к заработку смены, поэтому кнопка подписывается точной суммой.
+const REWARD_SHARE=.35,REWARD_MIN=50;
+const GUIDE_SLIDES=[
+  ['Как двигаться','Кликните по игре и осматривайтесь мышью. WASD — движение относительно взгляда, Shift — бег, Space — прыжок, E — действие. На телефоне: левый стик, свайп справа и кнопки «Прыжок» и «Действие».','tutorial/01-controls.png'],
+  ['Колонки и машины','Когда машина остановится, сначала снимите пистолет с отмеченной колонки. Затем подойдите к лючку машины и удерживайте E для заправки. После неё шланг вернётся на место.','tutorial/02-pumps.png'],
+  ['Кофе, еда и склад','Кофе и еда готовятся на двух аппаратах у прилавка — ищите таблички «КОФЕ» и «ЕДА». Если полка опустела, возьмите коробку у левого заднего стеллажа и поставьте её на правый.','tutorial/03-shop.png'],
+  ['Ночные происшествия','При отключении света вся заправка остановится: сначала возьмите инструменты и почините щиток у левой стены. Входные двери аварийно останутся открыты. Для пятна нужна швабра, а жёлтый ящик «НАХОДКИ» стоит справа.','tutorial/04-events.png']
+];
 
 class NightStationGame{
   constructor(){
     this.canvas=$('#scene');this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x091820);this.scene.fog=new THREE.FogExp2(0x091820,.022);
     this.camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.08,120);this.camera.position.set(0,1.65,-2.8);this.camera.rotation.order='YXZ';
     this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));this.renderer.setSize(innerWidth,innerHeight);this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.28;
-    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftLength=210;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock=6;this.carry=null;this.fuelHose=null;this.served=0;this.shiftStartMoney=0;this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.powerVisuals=[];this.state={...SAVE_DEFAULT,upgrades:{...SAVE_DEFAULT.upgrades}};
-    this.hands=new HandView();this.moving=false;this.lastYaw=0;this.lastPitch=0;this.grounded=true;this.jumpHeight=0;this.jumpSpeed=0;this.landDip=0;
+    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.carQueue=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftConfig=getShiftConfig(1);this.shiftLength=this.shiftConfig.duration;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock=6;this.carry=null;this.fuelHose=null;this.served=0;this.shiftStartMoney=0;this.shiftEarned=0;this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.powerVisuals=[];this.state=migrateProgress(DEFAULT_PROGRESS);
+    this.audio=audio;this.hands=new HandView();this.moving=false;this.lastYaw=0;this.lastPitch=0;this.grounded=true;this.jumpHeight=0;this.jumpSpeed=0;this.landDip=0;
     this.setupWorld();this.setupInput();this.setupUI();window.addEventListener('resize',()=>this.resize());document.addEventListener('visibilitychange',()=>this.visibility());
   }
   setupWorld(){
@@ -46,6 +55,7 @@ class NightStationGame{
     // Трасса тянется дальше, чем видит туман: машины успевают выехать и уехать по дороге.
     const road=new THREE.Mesh(new THREE.PlaneGeometry(144,9),new THREE.MeshStandardMaterial({color:0x070b0e,roughness:.97}));road.rotation.x=-Math.PI/2;road.position.set(0,.02,ROAD.center);road.receiveShadow=true;this.scene.add(road);
     const apron=new THREE.Mesh(new THREE.PlaneGeometry(21,5.4),new THREE.MeshStandardMaterial({color:0x1d272c,roughness:.96}));apron.rotation.x=-Math.PI/2;apron.position.set(0,.026,-13.2);apron.receiveShadow=true;this.scene.add(apron);
+    const queueApron=new THREE.Mesh(new THREE.PlaneGeometry(16,4.2),apron.material);queueApron.rotation.x=-Math.PI/2;queueApron.position.set(14,.027,-12.5);queueApron.receiveShadow=true;this.scene.add(queueApron);
     const stripeMat=new THREE.MeshBasicMaterial({color:0xb7a55f}),edgeMat=new THREE.MeshBasicMaterial({color:0x6d7472}),postMat=new THREE.MeshStandardMaterial({color:0xdad3bc,roughness:.9}),reflectMat=new THREE.MeshBasicMaterial({color:0xff7a2f});
     for(let x=-66;x<67;x+=6){const s=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.13),stripeMat);s.rotation.x=-Math.PI/2;s.position.set(x,.035,ROAD.center);this.scene.add(s)}
     for(let x=-66;x<67;x+=8){const e=new THREE.Mesh(new THREE.PlaneGeometry(7.4,.1),edgeMat);e.rotation.x=-Math.PI/2;e.position.set(x,.034,-21.2);this.scene.add(e)}
@@ -98,27 +108,48 @@ class NightStationGame{
     this.canvas.addEventListener('pointermove',e=>{if(!this.lookTouch||e.pointerId!==this.lookTouch.id)return;const dx=e.clientX-this.lookTouch.x,dy=e.clientY-this.lookTouch.y;this.lookTouch.x=e.clientX;this.lookTouch.y=e.clientY;this.yaw-=dx*.006;this.pitch=THREE.MathUtils.clamp(this.pitch-dy*.005,-1.2,1.15)});
     const stopLook=e=>{if(this.lookTouch&&e.pointerId===this.lookTouch.id)this.lookTouch=null};this.canvas.addEventListener('pointerup',stopLook);this.canvas.addEventListener('pointercancel',stopLook);
     const joy=$('#joystick'),nub=$('#joystick i');let joyId=null;const update=e=>{const r=joy.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),len=Math.hypot(x,y)||1,m=Math.min(38,len),nx=x/len,ny=y/len;this.joy={x:nx*m/38,y:ny*m/38};nub.style.transform=`translate(${nx*m}px,${ny*m}px)`};
-    joy.addEventListener('pointerdown',e=>{joyId=e.pointerId;joy.setPointerCapture(joyId);update(e)});joy.addEventListener('pointermove',e=>{if(e.pointerId===joyId)update(e)});const end=e=>{if(e.pointerId!==joyId)return;joyId=null;this.joy={x:0,y:0};nub.style.transform=''};joy.addEventListener('pointerup',end);joy.addEventListener('pointercancel',end);
-    const act=$('#action-btn');act.addEventListener('pointerdown',e=>{e.preventDefault();this.actionHeld=true;act.setPointerCapture(e.pointerId)});const release=()=>{this.actionHeld=false;this.actionProgress=0;this.actionLatched=false};act.addEventListener('pointerup',release);act.addEventListener('pointercancel',release);
-    const jump=$('#jump-btn');jump.addEventListener('pointerdown',e=>{e.preventDefault();this.keys.Space=true;try{jump.setPointerCapture(e.pointerId)}catch{}});const jumpEnd=()=>{this.keys.Space=false};jump.addEventListener('pointerup',jumpEnd);jump.addEventListener('pointercancel',jumpEnd);
+    joy.addEventListener('pointerdown',e=>{joyId=e.pointerId;try{joy.setPointerCapture(joyId)}catch{}update(e)});joy.addEventListener('pointermove',e=>{if(e.pointerId===joyId)update(e)});const end=e=>{if(e.pointerId!==joyId)return;joyId=null;this.joy={x:0,y:0};nub.style.transform=''};joy.addEventListener('pointerup',end);joy.addEventListener('pointercancel',end);
+    // Кнопка держится только своим пальцем: чужой pointerup её не отпускает, а свой — отпускает даже мимо кнопки.
+    const holdButton=(element,press,release)=>{
+      let active=null;
+      element.addEventListener('pointerdown',e=>{e.preventDefault();active=e.pointerId;press();try{element.setPointerCapture(e.pointerId)}catch{}});
+      const end=e=>{if(active===null||e.pointerId!==active)return;active=null;release()};
+      for(const type of ['pointerup','pointercancel','lostpointercapture'])element.addEventListener(type,end);
+      addEventListener('pointerup',end);addEventListener('pointercancel',end);
+    };
+    holdButton($('#action-btn'),()=>{this.actionHeld=true},()=>{this.actionHeld=false;this.actionProgress=0;this.actionLatched=false});
+    holdButton($('#jump-btn'),()=>{this.keys.Space=true},()=>{this.keys.Space=false});
   }
   lockPointer(){if(isTouch||this.mode!=='playing'||document.pointerLockElement===this.canvas)return;try{const result=this.canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
   setupUI(){
     $('#continue-btn').onclick=()=>this.prepareStart(false);$('#new-btn').onclick=()=>this.prepareStart(true);$('#tutorial-start').onclick=()=>{ui.tutorial.classList.add('hidden');this.state.tutorial=true;this.startShift();this.lockPointer()};
     $('#pause-btn').onclick=()=>this.pause();$('#resume-btn').onclick=()=>this.resume();$('#menu-btn').onclick=()=>{ui.pause.classList.add('hidden');this.showMenu()};$('#sound-btn').onclick=()=>this.toggleSound();
     const musicVolume=$('#music-volume'),musicValue=$('#music-volume-value');musicVolume.oninput=()=>{this.state.musicVolume=Number(musicVolume.value);musicValue.textContent=`${this.state.musicVolume}%`;audio.setMusicVolume(this.state.musicVolume/100)};musicVolume.onchange=()=>saveProgress(this.state);
-    $('#guide-btn').onclick=()=>this.openGuide();$('#guide-close').onclick=()=>this.closeGuide();$('#guide-prev').onclick=()=>{this.guideIndex=Math.max(0,this.guideIndex-1);this.renderGuide()};$('#guide-next').onclick=()=>{if(this.guideIndex>=3)this.closeGuide();else{this.guideIndex++;this.renderGuide()}};
-    $('#next-shift').onclick=async()=>{ui.results.classList.add('hidden');await showInterstitial();this.startShift()};
-    $('#reward-btn').onclick=async e=>{e.currentTarget.disabled=true;const success=await showRewarded();if(success){const bonus=Math.max(50,Math.round((this.state.money-this.shiftStartMoney)*.35));this.state.money+=bonus;this.toast(`Бонус за смену: <b>+₽${bonus}</b>`);this.updateHud();saveProgress(this.state)}e.currentTarget.classList.add('hidden')};
+    $('#guide-btn').onclick=()=>this.openGuide();$('#guide-close').onclick=()=>this.closeGuide();$('#guide-prev').onclick=()=>{this.guideIndex=Math.max(0,this.guideIndex-1);this.renderGuide()};$('#guide-next').onclick=()=>{if(this.guideIndex>=GUIDE_SLIDES.length-1)this.closeGuide();else{this.guideIndex++;this.renderGuide()}};
+    $('#next-shift').onclick=async()=>{
+      ui.results.classList.add('hidden');
+      if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}
+      await showInterstitial();this.startShift()
+    };
+    $('#campaign-menu').onclick=()=>this.showMenu();
+    $('#campaign-restart').onclick=()=>{
+      const preferences={tutorial:true,sound:this.state.sound,musicVolume:this.state.musicVolume};
+      this.setState({...DEFAULT_PROGRESS,...preferences});
+      ui.campaignComplete.classList.add('hidden');
+      this.startShift()
+    };
+    $('#reward-btn').onclick=async e=>{const button=e.currentTarget,bonus=this.rewardBonus();button.disabled=true;const success=await showRewarded();if(!success){button.disabled=false;this.toast('Реклама не загрузилась — надбавка не начислена');return}this.state.money+=bonus;this.toast(`Надбавка за смену: <b>+₽${bonus}</b>`);this.updateHud();this.updateUpgradeButtons();saveProgress(this.state);button.classList.add('hidden')};
     $$('.upgrades button').forEach(b=>b.onclick=()=>this.buyUpgrade(b.dataset.upgrade));
   }
-  setState(data){if(!data)return;this.state={...SAVE_DEFAULT,...data,upgrades:{...SAVE_DEFAULT.upgrades,...(data.upgrades||{})}};this.state.musicVolume=THREE.MathUtils.clamp(Number(this.state.musicVolume)||0,0,100);audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}}
-  showMenu(){this.mode='menu';document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal());}
-  prepareStart(fresh){audio.ensure();if(fresh)this.setState({...SAVE_DEFAULT,upgrades:{...SAVE_DEFAULT.upgrades},tutorial:false});ui.menu.classList.add('hidden');if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
+  setState(data){if(!data)return;this.state=migrateProgress(data);this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
+  showMenu(){this.mode='menu';document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
+  prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
-    this.clearShift();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=.8;this.eventTimer=24+Math.random()*7;this.trafficTimer=2.5;this.served=0;this.stock=6;this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.applyDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,.26,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');this.toast(`Смена ${this.state.shift} открыта. <b>До рассвета 03:30</b>`);this.updateHud();saveProgress(this.state);this.lockPointer()
+    if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}
+    this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;
+    this.clearShift();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.stock=6;this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.applyDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,.26,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');const mins=Math.floor(this.shiftLength/60),secs=this.shiftLength%60;this.toast(`Смена ${this.state.shift} открыта. <b>До рассвета ${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</b>`);this.updateHud();saveProgress(this.state);this.lockPointer()
   }
-  clearShift(){this.returnFuelHose();for(const c of [...this.cars])this.despawn(c);this.cars=[];for(const t of [...this.traffic])this.despawn(t);this.traffic=[];for(const j of this.jobs)if(j.visual)this.scene.remove(j.visual);this.jobs=[];this.pumps.forEach(p=>{p.car=null;p.broken=false});if(this.specialVan){this.despawn(this.specialVan);this.specialVan=null}this.carry=null;this.blackoutCarry=null;this.kitMop?.forEach(m=>m.visible=true);this.updateCarry()}
+  clearShift(){this.returnFuelHose();for(const c of [...this.cars])this.despawn(c);this.cars=[];this.carQueue=[];for(const t of [...this.traffic])this.despawn(t);this.traffic=[];for(const j of this.jobs)if(j.visual)this.scene.remove(j.visual);this.jobs=[];this.pumps.forEach(p=>{p.car=null;p.departingCar=null;p.broken=false});if(this.specialVan){this.despawn(this.specialVan);this.specialVan=null}this.carry=null;this.blackoutCarry=null;this.kitMop?.forEach(m=>m.visible=true);this.updateCarry()}
   update(dt){
     if(this.mode==='playing')this.updatePlay(dt);else if(this.mode==='menu'||this.mode==='loading')this.updateMenu(dt);
     this.sky.update(dt,this.camera.position);
@@ -131,16 +162,15 @@ class NightStationGame{
   }
   updateMenu(dt){const t=performance.now()*.00025;const target=new THREE.Vector3(12+Math.sin(t)*2,12,-16+Math.cos(t)*2);this.camera.position.lerp(target,dt*.6);this.camera.lookAt(0,1,-4)}
   openGuide(){if(this.mode!=='playing')return;this.resumeAfterGuide=true;this.mode='guide';this.actionHeld=false;document.exitPointerLock?.();audio.pause(true);this.guideIndex=0;this.renderGuide();ui.mobile.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.guide.classList.remove('hidden')}
-  renderGuide(){const slides=[
-    ['Как двигаться','Кликните по игре и осматривайтесь мышью. WASD — движение относительно взгляда, Shift — бег, Space — прыжок, E — действие. На телефоне: левый стик, свайп справа и кнопки «Прыжок» и «Действие».','tutorial/01-controls.png'],
-    ['Колонки и машины','Когда машина остановится, сначала снимите пистолет с отмеченной колонки. Затем подойдите к лючку машины и удерживайте E для заправки. После неё шланг вернётся на место.','tutorial/02-pumps.png'],
-    ['Кофе, еда и склад','Кофе и еда готовятся на двух аппаратах у прилавка — ищите таблички «КОФЕ» и «ЕДА». Товарные стеллажи теперь стоят у задней стены и не закрывают проходы.','tutorial/03-shop.png'],
-    ['Ночные происшествия','При отключении света вся заправка остановится: сначала возьмите инструменты и почините щиток у левой стены. Входные двери аварийно останутся открыты. Для пятна нужна швабра, а жёлтый ящик «НАХОДКИ» стоит справа.','tutorial/04-events.png']
-  ],s=slides[this.guideIndex];$('#guide-title').textContent=s[0];$('#guide-text').textContent=s[1];$('#guide-image').src=s[2];$('#guide-step').textContent=`${this.guideIndex+1} / ${slides.length}`;$('#guide-dots').innerHTML=slides.map((_,i)=>`<i class="${i===this.guideIndex?'active':''}"></i>`).join('');$('#guide-prev').disabled=this.guideIndex===0;$('#guide-next').textContent=this.guideIndex===slides.length-1?'В ИГРУ →':'ДАЛЬШЕ →'}
+  renderGuide(){const slides=GUIDE_SLIDES,s=slides[this.guideIndex];$('#guide-title').textContent=s[0];$('#guide-text').textContent=s[1];$('#guide-image').src=s[2];$('#guide-step').textContent=`${this.guideIndex+1} / ${slides.length}`;$('#guide-dots').innerHTML=slides.map((_,i)=>`<i class="${i===this.guideIndex?'active':''}"></i>`).join('');$('#guide-prev').disabled=this.guideIndex===0;$('#guide-next').textContent=this.guideIndex===slides.length-1?'В ИГРУ →':'ДАЛЬШЕ →'}
   closeGuide(){ui.guide.classList.add('hidden');if(!this.resumeAfterGuide)return;this.resumeAfterGuide=false;this.mode='playing';audio.pause(false);ui.mobile.classList.toggle('hidden',!isTouch);ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);this.lockPointer();this.clock.getDelta()}
   updatePlay(dt){
     this.elapsed+=dt;if(this.elapsed>=this.shiftLength){this.finishShift();return}
-    if(!this.blackout){this.spawnTimer-=dt;this.eventTimer-=dt;if(this.spawnTimer<=0){this.spawnCar();this.spawnTimer=Math.max(10,22-this.state.shift*1.1)+Math.random()*8}if(this.eventTimer<=0){this.triggerEvent();this.eventTimer=31+Math.random()*17}}
+    if(!this.blackout){
+      this.spawnTimer-=dt;this.eventTimer-=dt;
+      if(this.spawnTimer<=0){const spawned=this.spawnCar();this.spawnTimer=spawned?randomFromRange(this.shiftConfig.carSpawn.interval):this.shiftConfig.carSpawn.queueRetry}
+      if(this.eventTimer<=0){this.triggerEvent();this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.interval)}
+    }
     this.updateTraffic(dt);
     this.updateDoors(dt);this.updatePlayer(dt);this.updateCars(dt);this.updateJobs(dt);this.updateInteraction(dt);this.updateHud();
   }
@@ -218,7 +248,8 @@ class NightStationGame{
     const previousBlocker=vehicle.blockedByVehicle;vehicle.blockedByPlayer=false;vehicle.blockedByVehicle=null;
     // Последние метры перед колонкой — отдельная безопасная зона: машина ждёт снаружи,
     // пока игрок не освободит всё парковочное место, а не только точку под центром кузова.
-    if(this.player&&vehicle.status===VEHICLE_STATE.ENTERING&&vehicle.path.len-vehicle.dist<SAFE_APPROACH&&this.playerInStopZone(vehicle)){vehicle.blockedByPlayer=true;return false}
+    const approachingStop=vehicle.status===VEHICLE_STATE.APPROACHING_PUMP||(vehicle===this.specialVan&&vehicle.status===VEHICLE_STATE.ENTERING);
+    if(this.player&&approachingStop&&vehicle.path.len-vehicle.dist<SAFE_APPROACH&&this.playerInStopZone(vehicle)){vehicle.blockedByPlayer=true;return false}
     if(this.player&&this.pointInVehicle(this.player.position.x,this.player.position.z,vehicle,PLAYER_RADIUS+SAFE_MARGIN,step.position,step.rotationY)){vehicle.blockedByPlayer=true;return false}
     // Средняя точка шага закрывает щель между кадрами при низком FPS и на крутом повороте.
     const mid={x:(step.from.x+step.position.x)/2,z:(step.from.z+step.position.z)/2};
@@ -242,13 +273,17 @@ class NightStationGame{
     const nx=p.x+mx/len*step,nz=p.z+mz/len*step;if(!this.isBlocked(nx,nz,vehicle)){p.x=nx;p.z=nz}
   }
   updateCars(dt){
+    this.dispatchQueuedCars();
     for(const c of [...this.cars]){
-      if(c.status===VEHICLE_STATE.ENTERING){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){c.status=VEHICLE_STATE.WAITING;c.phase='parked';c.speed=0;c.lights.set({brake:false,beam:false,reverse:false});this.addFuelJob(c)}}
+      if(c.status===VEHICLE_STATE.ENTERING){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){c.status=VEHICLE_STATE.QUEUEING;c.phase='queued';c.speed=0;c.lights.set({brake:true,beam:false,reverse:false});this.dispatchQueuedCars()}}
+      else if(c.status===VEHICLE_STATE.QUEUEING){if(c.phase==='advancingQueue'){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){c.phase='queued';c.speed=0;c.lights.set({brake:true,beam:false,reverse:false});this.dispatchQueuedCars()}}}
+      else if(c.status===VEHICLE_STATE.APPROACHING_PUMP){this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){c.status=VEHICLE_STATE.WAITING;c.phase='parked';c.speed=0;c.lights.set({brake:false,beam:false,reverse:false});this.addFuelJob(c)}}
       else if(c.status===VEHICLE_STATE.LEAVING){
         if(c.phase==='yielding'){c.speed=0;c.lights.set({brake:true,beam:false,reverse:false});if(this.mergeClear(c)){c.phase='exiting';c.mergeCommitted=true;setPath(c,exitPath(c.slotX,SLOT_Z,c.side),11.5);audio.tone(96,.5,'sawtooth',.07)}continue}
-        this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){if(c.phase==='reversing'){c.phase='yielding';c.speed=0;c.blockedByVehicle=null}else this.despawn(c,this.cars)}
+        this.resolvePlayerOverlap(c,dt);if(drive(c,dt)){if(c.phase==='reversing'){c.phase='yielding';c.speed=0;c.blockedByVehicle=null;if(c.pump?.car===c){c.pump.car=null;c.pump.departingCar=c}this.dispatchQueuedCars()}else this.despawn(c,this.cars)}
       }
     }
+    this.dispatchQueuedCars();
     const v=this.specialVan;
     if(v){
       if(v.status===VEHICLE_STATE.ENTERING){this.resolvePlayerOverlap(v,dt);if(drive(v,dt)){v.status=VEHICLE_STATE.WAITING;v.phase='parked';v.speed=0;v.lights.set({brake:false,beam:false,reverse:false});this.addJob({title:'Проверьте странный фургон',sub:'Водитель молчит и не открывает окно',pos:()=>v.group.position,duration:2.8,patience:40,onComplete:()=>{this.state.money+=90;this.state.rep=Math.min(5,this.state.rep+.1);this.eventNotice('…','Внутри никого','На сиденье лежал чек с завтрашней датой. Вы получили ₽90.');audio.spooky();this.leaveSpecialVan()}})}}
@@ -280,33 +315,47 @@ class NightStationGame{
     this.scene.remove(vehicle.group);vehicle.lights?.dispose();
     vehicle.group.traverse(o=>{if(o.isMesh&&o.material?.userData?.owned)o.material.dispose()});
     if(list){const i=list.indexOf(vehicle);if(i>=0)list.splice(i,1)}
+    const queueIndex=this.carQueue.indexOf(vehicle);if(queueIndex>=0)this.carQueue.splice(queueIndex,1);
     if(vehicle.pump&&vehicle.pump.car===vehicle)vehicle.pump.car=null;
   }
   spawnCar(){
-    const pump=this.pumps.find(p=>!p.car&&!p.broken);if(!pump)return;
-    const group=this.assets.car.clone(true),side=Math.sign(pump.x),from=Math.random()<.5?-1:1;
+    if(this.carQueue.length>=this.shiftConfig.queueSize)return false;
+    const group=this.assets.car.clone(true),queueIndex=this.carQueue.length;
     this.paintCar(group);this.scene.add(group);
-    const c={id:++this.vehicleId,group,pump,status:VEHICLE_STATE.ENTERING,phase:'approaching',side,slotX:pump.slotX,t:0,lights:addLights(group),halfWidth:1.18,halfLength:2.2,
-      spot:new THREE.Vector3(pump.x+side*1.25,.25,SLOT_Z),
-      target:new THREE.Vector3(pump.slotX,ROAD.y,pump.z),safeZone:{x:pump.slotX,z:pump.z,halfWidth:1.18+PLAYER_RADIUS+SAFE_MARGIN,halfLength:2.2+PLAYER_RADIUS+SAFE_MARGIN},patience:46-Math.min(12,this.state.shift*1.2)};
+    const c={id:++this.vehicleId,group,pump:null,status:VEHICLE_STATE.ENTERING,phase:'joiningQueue',queueIndex,side:1,slotX:null,t:0,lights:addLights(group),halfWidth:1.18,halfLength:2.2,spot:null,target:queuePoint(queueIndex),safeZone:null,patience:this.shiftConfig.customerPatience};
     c.canAdvance=step=>this.canVehicleAdvance(c,step);
-    let placed=false;for(const direction of[from,-from]){setPath(c,entryPath(pump.slotX,SLOT_Z,direction,laneFor(-direction)),11);if(!this.vehicleAtStartIsBlocked(c)){placed=true;break}}
-    if(!placed){this.despawn(c);return}
-    c.speed=10;pump.car=c;this.cars.push(c);audio.tone(105,.35,'sawtooth',.12);
+    setPath(c,queueEntryPath(queueIndex),10);if(this.vehicleAtStartIsBlocked(c)){this.despawn(c);return false}
+    c.speed=9;this.cars.push(c);this.carQueue.push(c);audio.tone(105,.35,'sawtooth',.12);
+    return true
+  }
+  refreshQueuePositions(){
+    this.carQueue.forEach((car,index)=>{
+      if(car.queueIndex===index)return;car.queueIndex=index;car.target=queuePoint(index);
+      setPath(car,queueAdvancePath(car.group.position,index),5.5);car.phase='advancingQueue';car.speed=Math.min(car.speed||0,4)
+    })
+  }
+  assignPump(car,pump){
+    this.carQueue.shift();car.queueIndex=-1;car.pump=pump;car.side=Math.sign(pump.x)||1;car.slotX=pump.slotX;car.target=new THREE.Vector3(pump.slotX,ROAD.y,pump.z);car.spot=new THREE.Vector3(pump.x+car.side*1.25,.25,SLOT_Z);car.safeZone={x:pump.slotX,z:pump.z,halfWidth:car.halfWidth+PLAYER_RADIUS+SAFE_MARGIN,halfLength:car.halfLength+PLAYER_RADIUS+SAFE_MARGIN};pump.car=car;car.status=VEHICLE_STATE.APPROACHING_PUMP;car.phase='approachingPump';setPath(car,queueToPumpPath(car.group.position,pump.slotX,SLOT_Z),9);car.speed=Math.min(car.speed||0,5)
+  }
+  pumpReadyForArrival(pump){const departing=pump.departingCar;if(!departing)return true;const queueTailX=queuePoint(Math.max(0,this.shiftConfig.queueSize-1)).x,clear=!this.cars.includes(departing)||departing.phase==='exiting'&&(departing.side<0?departing.group.position.x>queueTailX+4:departing.dist>10);if(clear)pump.departingCar=null;return clear}
+  dispatchQueuedCars(){
+    let assigned=false;
+    while(this.carQueue.length){const car=this.carQueue[0],pump=this.pumps.find(candidate=>!candidate.car&&!candidate.broken&&this.pumpReadyForArrival(candidate));if(!pump||car.status!==VEHICLE_STATE.QUEUEING||car.phase!=='queued')break;this.assignPump(car,pump);assigned=true}
+    if(assigned)this.refreshQueuePositions();return assigned
   }
   addFuelJob(car,patience=car.patience){
     const number=this.pumps.indexOf(car.pump)+1,pickup=this.addJob({car,kind:'hose-pickup',title:`Возьмите пистолет колонки ${number}`,sub:'Снимите шланг с колонки',pos:()=>car.pump.hoseSpot,duration:.65,patience,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands()||car.status===VEHICLE_STATE.LEAVING||car.pump.car!==car)return false;const left=Math.max(10,pickup.patience||car.patience);this.takeFuelHose(car);this.addFuelAction(car,left)}});car.job=pickup
   }
   addFuelAction(car,patience){
-    car.job=this.addJob({car,kind:'fuel',need:'hose',title:'Заправьте машину',sub:`Подойдите к лючку · колонка ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:2.7,patience,onFail:()=>{this.returnFuelHose(car);this.loseCustomer(car)},onComplete:()=>{this.returnFuelHose(car);car.status=VEHICLE_STATE.WAITING;const gain=75+this.state.shift*4;this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);if(Math.random()<.62)this.createOrder(car);else{this.served++;setTimeout(()=>this.leaveCar(car),800)}}})
+    car.job=this.addJob({car,kind:'fuel',need:'hose',title:'Заправьте машину',sub:`Подойдите к лючку · колонка ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:2.7,patience,onFail:()=>{this.returnFuelHose(car);this.loseCustomer(car)},onComplete:()=>{this.returnFuelHose(car);car.status=VEHICLE_STATE.WAITING;const gain=75+this.shiftConfig.number*4;this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);if(Math.random()<this.shiftConfig.orderIntensity)this.createOrder(car);else{this.served++;setTimeout(()=>this.leaveCar(car),800)}}})
   }
   takeFuelHose(car){this.fuelHose={pump:car.pump,car};car.pump.hoseParts.forEach(o=>o.visible=false);this.carry='hose';this.updateCarry();this.updateFuelHoseVisual();audio.tone(240,.12,'square',.1)}
   returnFuelHose(car=null){
     if(!this.fuelHose||car&&this.fuelHose.car!==car)return;this.fuelHose.pump.hoseParts.forEach(o=>o.visible=true);this.fuelHose=null;this.hoseWorld.visible=false;if(this.carry==='hose'){this.carry=null;this.updateCarry()}
   }
   createOrder(car){
-    car.status=VEHICLE_STATE.WAITING;const kind=Math.random()<.58?'coffee':'snack',isCoffee=kind==='coffee',source=isCoffee?COFFEE_SPOT:FOOD_SPOT,name=isCoffee?'кофе':'сэндвич';
-    this.addJob({car,title:`Приготовьте ${name}`,sub:`Заказ с колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>source,duration:isCoffee?1.5:1.05,patience:32,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands())return false;if(!isCoffee&&this.stock<=0){this.toast('Полка пуста — возьмите коробку на складе');this.createRestockJob();return false}if(!isCoffee)this.stock--;this.carry=kind;this.updateCarry();audio.tone(620,.12,'square',.14);this.addJob({car,title:`Отнесите ${name}`,sub:`К машине у колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:.7,patience:24,onFail:()=>{this.carry=null;this.updateCarry();this.loseCustomer(car)},onComplete:()=>{if(this.carry!==kind)return false;this.carry=null;this.updateCarry();const gain=(isCoffee?55+this.state.upgrades.coffee*15:48);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.08);this.served++;audio.success();this.toast(`Заказ выдан <b>+₽${gain}</b>`);this.leaveCar(car);if(this.stock<=2)this.createRestockJob()}})}})
+    car.status=VEHICLE_STATE.WAITING;const kind=Math.random()<.58?'coffee':'snack',isCoffee=kind==='coffee',source=isCoffee?COFFEE_SPOT:FOOD_SPOT,name=isCoffee?'кофе':'сэндвич',prepPatience=Math.round(this.shiftConfig.customerPatience*.7),deliveryPatience=Math.round(this.shiftConfig.customerPatience*.52);
+    this.addJob({car,title:`Приготовьте ${name}`,sub:`Заказ с колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>source,duration:isCoffee?1.5:1.05,patience:prepPatience,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands())return false;if(!isCoffee&&this.stock<=0){this.toast('Полка пуста — возьмите коробку на складе');this.createRestockJob();return false}if(!isCoffee)this.stock--;this.carry=kind;this.updateCarry();audio.tone(620,.12,'square',.14);this.addJob({car,title:`Отнесите ${name}`,sub:`К машине у колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:.7,patience:deliveryPatience,onFail:()=>{this.carry=null;this.updateCarry();this.loseCustomer(car)},onComplete:()=>{if(this.carry!==kind)return false;this.carry=null;this.updateCarry();const gain=(isCoffee?55+this.state.upgrades.coffee*15:48);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.08);this.served++;audio.success();this.toast(`Заказ выдан <b>+₽${gain}</b>`);this.leaveCar(car);if(this.stock<=2)this.createRestockJob()}})}})
   }
   createRestockJob(){if(this.jobs.some(j=>j.tag==='restock-pick'||j.tag==='restock-put'))return;this.addJob({tag:'restock-pick',title:'Возьмите коробку товара',sub:'Коробка перед левым задним стеллажом',pos:()=>STOCK_PICK_SPOT,duration:1.1,onComplete:()=>{if(!this.freeHands())return false;this.carry='box';this.updateCarry();this.addJob({tag:'restock-put',title:'Пополните полку',sub:'Поставьте коробку на правый задний стеллаж',pos:()=>STOCK_SHELF_SPOT,duration:1.6,onComplete:()=>{if(this.carry!=='box')return false;this.carry=null;this.stock=6;this.updateCarry();this.state.money+=20;this.toast('Товар расставлен <b>+₽20</b>');audio.success()}})}})}
   leaveCar(car){if(!car||car.status===VEHICLE_STATE.LEAVING)return;this.returnFuelHose(car);this.jobs.filter(j=>j.car===car).forEach(j=>this.removeJob(j));car.status=VEHICLE_STATE.LEAVING;car.phase='reversing';car.mergeCommitted=false;setPath(car,reversePath(car.slotX,SLOT_Z,car.side),2.9);audio.tone(78,.45,'sine',.07)}
@@ -326,14 +375,23 @@ class NightStationGame{
     if(nearest&&this.actionHeld&&!missing&&!poweredOff&&!this.actionLatched){this.actionProgress+=dt*(1+this.state.upgrades.service*.15);nearest.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);nearest?.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.add('hidden')}
   }
   triggerEvent(){
-    const options=['spill','blackout','bag','broken','van','whisper'].filter(x=>!(x==='blackout'&&this.blackout)&&!(x==='van'&&this.specialVan)&&!(x==='bag'&&this.jobs.some(j=>j.tag==='bag'))&&!(x==='spill'&&this.jobs.some(j=>j.tag==='spill'))&&!(x==='broken'&&this.jobs.some(j=>j.tag==='broken')));const type=options[Math.floor(Math.random()*options.length)];
-    if(type==='spill')this.spawnSpill();if(type==='blackout')this.eventBlackout();if(type==='bag')this.eventBag();if(type==='broken')this.eventBrokenPump();if(type==='van')this.eventVan();if(type==='whisper')this.eventWhisper()
+    const options=this.shiftConfig.allowedEvents.filter(x=>!(x==='blackout'&&this.blackout)&&!(x==='van'&&this.specialVan)&&!(x==='bag'&&this.jobs.some(j=>j.tag==='bag'))&&!(x==='spill'&&this.jobs.some(j=>j.tag==='spill'))&&!(x==='broken'&&this.jobs.some(j=>j.tag==='broken')));
+    const type=options[Math.floor(Math.random()*options.length)];if(!type)return false;
+    const handlers={spill:()=>this.spawnSpill(),blackout:()=>this.eventBlackout(),bag:()=>this.eventBag(),broken:()=>this.eventBrokenPump(),van:()=>this.eventVan(),whisper:()=>this.eventWhisper()};handlers[type]?.();return true
   }
   spawnSpill(){
-    const p=new THREE.Vector3(0,.255,0);do{p.set(-3+Math.random()*6,.255,-1+Math.random()*4)}while(Math.hypot(p.x-MOP_SPOT.x,p.z-MOP_SPOT.z)<1.3);
+    const p=new THREE.Vector3(0,.255,0);let fits=false;
+    for(let i=0;i<60&&!fits;i++){p.set(-2.6+Math.random()*5.2,.255,.95+Math.random()*2.1);fits=this.spillFits(p)}
+    if(!fits)p.set(1.6,.255,1.8);
     const visual=new THREE.Group(),coffee=new THREE.MeshBasicMaterial({color:0x6b2f1b,transparent:true,opacity:.94,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),shine=new THREE.MeshBasicMaterial({color:0xc7783e,transparent:true,opacity:.7,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3});
     [[0,0,.68,coffee],[-.48,.08,.28,coffee],[.43,-.18,.22,coffee],[.14,.3,.13,shine],[-.2,-.13,.09,shine]].forEach(([x,z,r,material],i)=>{const drop=new THREE.Mesh(new THREE.CircleGeometry(r,12),material);drop.name=i?'CoffeeDrop':'CoffeeSpill';drop.rotation.x=-Math.PI/2;drop.position.set(x,i*.001,z);drop.scale.set(1,i?.68:.82,1);drop.renderOrder=3;visual.add(drop)});visual.position.copy(p);this.scene.add(visual);
     this.eventNotice('≋','Кто-то разлил кофе','Пол становится липким. Швабра стоит внутри, за прилавком.');this.addJob({tag:'spill',need:'mop',title:'Уберите пятно',sub:'Швабра стоит внутри, за прилавком',pos:()=>p,duration:2.2,visual,onProgress:value=>{const size=Math.max(.12,1-value*.88);visual.scale.setScalar(size);visual.children.forEach((drop,i)=>drop.material.opacity=(i>2?.7:.94)*(.45+.55*(1-value)))},onComplete:()=>{this.state.money+=25;this.toast('Чисто! <b>+₽25</b>');audio.success();this.stowTool()}})
+  }
+  /* Лужа должна целиком лежать на полу и не спорить за внимание с инвентарём уборщика. */
+  spillFits(p){
+    if(Math.hypot(p.x-MOP_SPOT.x,p.z-MOP_SPOT.z)<1.25||this.isBlocked(p.x,p.z))return false;
+    for(let i=0;i<8;i++){const a=i/8*Math.PI*2;if(this.isBlocked(p.x+Math.cos(a)*.62,p.z+Math.sin(a)*.62))return false}
+    return true
   }
   eventBlackout(){
     if(this.blackout)return;this.blackout=true;this.nearest?.onProgress?.(0);this.actionProgress=0;this.actionLatched=false;
@@ -370,15 +428,24 @@ class NightStationGame{
   freeHands(){if(!this.carry)return true;if(this.carry==='mop'||this.carry==='tools'){const note=STOW_NOTE[this.carry];this.stowTool();this.toast(note);return true}this.toast('Сначала отдайте то, что уже в руках');return false}
   stowTool(){if(this.carry!=='mop'&&this.carry!=='tools')return;if(this.carry==='mop')this.kitMop.forEach(m=>m.visible=true);this.carry=null;this.updateCarry()}
   jobLabel(job){return typeof job.title==='function'?job.title():job.title}
-  updateHud(){ui.money.textContent=Math.floor(this.state.money).toLocaleString('ru-RU');ui.rep.textContent=this.state.rep.toFixed(1);const remain=Math.max(0,this.shiftLength-this.elapsed),mins=Math.floor(remain/60),secs=Math.floor(remain%60);ui.clock.textContent=`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;ui.shift.textContent=`СМЕНА ${this.state.shift}`}
+  updateHud(){ui.money.textContent=Math.floor(this.state.money).toLocaleString('ru-RU');ui.rep.textContent=this.state.rep.toFixed(1);const remain=Math.max(0,this.shiftLength-this.elapsed),mins=Math.floor(remain/60),secs=Math.floor(remain%60);ui.clock.textContent=`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;ui.shift.textContent=this.shiftConfig.mode===PLAY_MODE.ENDLESS?`БЕСКОНЕЧНАЯ · ${this.shiftConfig.number}`:`СМЕНА ${this.shiftConfig.number} / ${CAMPAIGN_SHIFT_COUNT}`}
   toast(html){const t=document.createElement('div');t.className='toast';t.innerHTML=html;ui.toasts.append(t);setTimeout(()=>t.remove(),3300)}
   finishShift(){
-    this.mode='results';document.exitPointerLock?.();this.actionHeld=false;ui.mobile.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.prompt.classList.add('hidden');ui.progress.classList.add('hidden');ui.results.classList.remove('hidden');const earned=this.state.money-this.shiftStartMoney;$('#result-money').textContent=`₽${Math.max(0,Math.floor(earned))}`;$('#result-served').textContent=this.served;$('#result-rep').textContent=`${this.state.rep.toFixed(1)}★`;$('#result-title').textContent=this.state.rep>4?'Трасса вас запомнит.':this.state.rep>2.4?'Неплохая ночка.':'Бывало и спокойнее.';this.state.best=Math.max(this.state.best,earned);this.state.shift++;this.updateUpgradeButtons();$('#reward-btn').classList.toggle('hidden',!gpState.available);$('#reward-btn').disabled=false;saveProgress(this.state)
+    this.mode='results';document.exitPointerLock?.();this.actionHeld=false;ui.mobile.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.prompt.classList.add('hidden');ui.progress.classList.add('hidden');ui.results.classList.remove('hidden');
+    const earned=Math.max(0,Math.floor(this.state.money-this.shiftStartMoney)),campaignDone=isFinalCampaignShift(this.shiftConfig);this.shiftEarned=earned;this.state.best=Math.max(this.state.best,earned);if(this.shiftConfig.mode===PLAY_MODE.CAMPAIGN){this.state.campaignEarnings+=earned;this.state.campaignServed+=this.served}
+    $('#result-money').textContent=`₽${earned}`;$('#result-served').textContent=this.served;$('#result-rep').textContent=`${this.state.rep.toFixed(1)}★`;$('#result-best').textContent=`₽${Math.floor(this.state.best)}`;$('#result-title').textContent=campaignDone?'Последняя ночь позади.':this.state.rep>4?'Трасса вас запомнит.':this.state.rep>2.4?'Неплохая ночка.':'Бывало и спокойнее.';
+    if(this.shiftConfig.mode===PLAY_MODE.ENDLESS)this.state.shift=this.shiftConfig.number+1;else if(campaignDone)this.state.campaignComplete=true;else this.state.shift=this.shiftConfig.number+1;
+    const upgrades=$('.upgrades');upgrades.classList.toggle('hidden',campaignDone);this.updateUpgradeButtons();const next=$('#next-shift');next.innerHTML=campaignDone?'ЗАВЕРШИТЬ КАМПАНИЮ <span>→</span>':'СЛЕДУЮЩАЯ СМЕНА <span>→</span>';
+    const reward=$('#reward-btn');reward.textContent=`СМОТРЕТЬ РЕКЛАМУ: +₽${this.rewardBonus()}`;reward.classList.toggle('hidden',!gpState.available);reward.disabled=false;saveProgress(this.state)
   }
+  showCampaignComplete(){
+    this.mode='campaign-complete';document.exitPointerLock?.();ui.menu.classList.add('hidden');ui.results.classList.add('hidden');ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.campaignComplete.classList.remove('hidden');$('#campaign-money').textContent=`₽${Math.floor(this.state.money)}`;$('#campaign-earned').textContent=`₽${Math.floor(this.state.campaignEarnings)}`;$('#campaign-served').textContent=this.state.campaignServed;$('#campaign-best').textContent=`₽${Math.floor(this.state.best)}`;saveProgress(this.state)
+  }
+  rewardBonus(){return Math.max(REWARD_MIN,Math.round(this.shiftEarned*REWARD_SHARE))}
   updateUpgradeButtons(){$$('.upgrades button').forEach(b=>{const costs={speed:200,service:250,coffee:180},lvl=this.state.upgrades[b.dataset.upgrade]||0;b.disabled=lvl>=3||this.state.money<costs[b.dataset.upgrade];b.querySelector('b').textContent=lvl>=3?'МАКС':`₽${costs[b.dataset.upgrade]}`})}
   buyUpgrade(key){const costs={speed:200,service:250,coffee:180},cost=costs[key];if(this.state.money<cost||(this.state.upgrades[key]||0)>=3)return;this.state.money-=cost;this.state.upgrades[key]=(this.state.upgrades[key]||0)+1;audio.success();this.updateUpgradeButtons();this.updateHud();saveProgress(this.state)}
   pause(){if(this.mode!=='playing')return;this.mode='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');ui.mobile.classList.add('hidden');ui.lookHint.classList.add('hidden');audio.pause(true)}
-  resume(){if(this.mode!=='paused')return;this.mode='playing';ui.pause.classList.add('hidden');ui.mobile.classList.toggle('hidden',!isTouch);ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch);audio.pause(false);this.lockPointer();this.clock.getDelta()}
+  resume(){if(this.mode!=='paused')return;this.mode='playing';ui.pause.classList.add('hidden');ui.mobile.classList.toggle('hidden',!isTouch);ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);audio.pause(false);this.lockPointer();this.clock.getDelta()}
   toggleSound(){this.state.sound=!this.state.sound;audio.setMuted(!this.state.sound);$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`;saveProgress(this.state)}
   visibility(){if(document.hidden&&this.mode==='playing')this.pause();audio.pause(document.hidden||this.mode==='paused')}
   resize(){this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));this.renderer.setSize(innerWidth,innerHeight)}
@@ -387,7 +454,7 @@ class NightStationGame{
 
 const game=new NightStationGame();
 window.__nightStation=game;
-let cloudSave=null;initGamePush(data=>{cloudSave=data;game.setState(data);bindAdPause(v=>{audio.pause(v);if(v&&game.mode==='playing')game.pause()})});
+let cloudSave=null;initGamePush(data=>{cloudSave=data;game.setState(data);$('#continue-btn').classList.remove('hidden');bindAdPause(v=>{audio.pause(v);if(v&&game.mode==='playing')game.pause()})});
 try{
-  await game.load();game.setState(cloudSave||loadLocal()||SAVE_DEFAULT);audio.setMuted(!game.state.sound);setTimeout(()=>{ui.loading.classList.add('hidden');game.showMenu()},450);game.run();
+  await game.load();game.setState(cloudSave||loadLocal()||DEFAULT_PROGRESS);audio.setMuted(!game.state.sound);setTimeout(()=>{ui.loading.classList.add('hidden');game.showMenu()},450);game.run();
 }catch(error){console.error(error);ui.loadText.textContent='Не удалось загрузить смену. Обновите страницу.';ui.loadText.style.color='#ff795f'}

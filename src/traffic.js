@@ -5,6 +5,7 @@ import * as THREE from 'three';
 
 export const ROAD={center:-17,near:-14.9,far:-19.1,edge:58,y:-.05};
 export const laneFor=dir=>dir>0?ROAD.near:ROAD.far; // правостороннее движение
+export const SERVICE_QUEUE={headX:14,headZ:-12,stepX:5.3,stepZ:0};
 
 const TMP=new THREE.Vector3(),NEXT=new THREE.Vector3();
 const point=([x,z])=>new THREE.Vector3(x,ROAD.y,z);
@@ -21,6 +22,41 @@ export function entryPath(slotX,slotZ,side,lane){
     [side*ROAD.edge,lane],[side*32,lane],[slotX+side*17,lane],
     [slotX+side*12.5,lane+d*.22],[slotX+side*8.8,lane+d*.62],[slotX+side*5.6,turn],
     [slotX+side*3.2,slotZ-3.1],[slotX+side*1.4,slotZ-2],[slotX+side*.25,slotZ-1.15],[slotX,slotZ-.55],[slotX,slotZ]
+  ]);
+}
+
+export function queuePoint(index){
+  const slot=Math.max(0,index);
+  return new THREE.Vector3(SERVICE_QUEUE.headX+slot*SERVICE_QUEUE.stepX,ROAD.y,SERVICE_QUEUE.headZ+slot*SERVICE_QUEUE.stepZ);
+}
+
+/* Все клиенты въезжают в одну физическую FIFO-линию на площадке перед АЗС. */
+export function queueEntryPath(index){
+  const target=queuePoint(index),lane=ROAD.far;
+  return path([
+    [ROAD.edge,lane],[38,lane],[29,-18.1],[24,-15.8],
+    [target.x+4.2,target.z-1.2],[target.x,target.z]
+  ]);
+}
+
+/* После ухода головной машины оставшиеся автомобили подтягиваются без телепортации. */
+export function queueAdvancePath(position,index){
+  const target=queuePoint(index),midX=(position.x+target.x)/2,midZ=(position.z+target.z)/2;
+  return path([[position.x,position.z],[midX,midZ],[target.x,target.z]]);
+}
+
+/* Последний участок из очереди к конкретной колонке использует ту же систему кривых движения. */
+export function queueToPumpPath(position,slotX,slotZ){
+  const side=Math.sign(slotX)||1,outerX=slotX+side*3.2,stagingX=side>0?10:2;
+  return path([
+    [position.x,position.z],
+    [10,slotZ-5.6],
+    [stagingX,slotZ-6.25],
+    [outerX,slotZ-5.9],
+    [outerX,slotZ-3.2],
+    [slotX+side*.9,slotZ-1.75],
+    [slotX+side*.25,slotZ-.75],
+    [slotX,slotZ]
   ]);
 }
 

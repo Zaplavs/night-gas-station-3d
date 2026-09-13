@@ -109,15 +109,31 @@
     <div class="dialog results-card">
       <p class="eyebrow">РАССВЕТ · СМЕНА ЗАКРЫТА</p>
       <h2 id="result-title">Неплохая ночка.</h2>
-      <div class="result-row"><div><small>ЗАРАБОТАНО</small><b id="result-money">₽0</b></div><div><small>ОБСЛУЖЕНО</small><b id="result-served">0</b></div><div><small>РЕПУТАЦИЯ</small><b id="result-rep">3.0★</b></div></div>
+      <div class="result-row"><div><small>ЗАРАБОТАНО</small><b id="result-money">₽0</b></div><div><small>ОБСЛУЖЕНО</small><b id="result-served">0</b></div><div><small>РЕПУТАЦИЯ</small><b id="result-rep">3.0★</b></div><div><small>РЕКОРД</small><b id="result-best">₽0</b></div></div>
       <div class="upgrades">
         <p>УЛУЧШЕНИЯ НА СЛЕДУЮЩУЮ СМЕНУ</p>
         <button data-upgrade="speed"><span>Быстрые кроссовки<small>Скорость +12%</small></span><b>₽200</b></button>
         <button data-upgrade="service"><span>Хороший инструмент<small>Действия +15%</small></span><b>₽250</b></button>
         <button data-upgrade="coffee"><span>Зёрна получше<small>Кофе дороже на ₽15</small></span><b>₽180</b></button>
       </div>
-      <button id="reward-btn" class="secondary hidden">УДВОИТЬ ЧАЕВЫЕ ЗА РЕКЛАМУ</button>
+      <button id="reward-btn" class="secondary hidden">СМОТРЕТЬ РЕКЛАМУ: НАДБАВКА К ЗАРАБОТКУ</button>
       <button id="next-shift" class="primary">СЛЕДУЮЩАЯ СМЕНА <span>→</span></button>
+    </div>
+  </section>
+
+  <section id="campaign-complete" class="screen modal-screen hidden">
+    <div class="dialog results-card campaign-card">
+      <p class="eyebrow">РАССВЕТ · КАМПАНИЯ ЗАВЕРШЕНА</p>
+      <h2>Семь ночей позади.</h2>
+      <p class="campaign-copy">Заправка пережила отключения света, странных гостей и самую длинную ночь. Теперь это место на трассе знают все.</p>
+      <div class="result-row">
+        <div><small>КАССА</small><b id="campaign-money">₽0</b></div>
+        <div><small>ЗА КАМПАНИЮ</small><b id="campaign-earned">₽0</b></div>
+        <div><small>КЛИЕНТОВ</small><b id="campaign-served">0</b></div>
+        <div><small>ЛУЧШАЯ СМЕНА</small><b id="campaign-best">₽0</b></div>
+      </div>
+      <button id="campaign-restart" class="primary">НАЧАТЬ КАМПАНИЮ ЗАНОВО <span>↻</span></button>
+      <button id="campaign-menu" class="text-btn">В главное меню</button>
     </div>
   </section>
 
