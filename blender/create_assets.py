@@ -210,6 +210,24 @@ def make_station():
     for x in (-2.55, 2.55):
         cube("CanopyLight", (x,4.72,-7.4), (1.25,.04,.5), M["cyan"], .02)
         cube("PumpIsland", (x,.12,-7.4), (1.15,.12,1.05), M["concrete"])
+    # Left wing: a third bay stands away from the canopy, on its own mast light,
+    # next to the fill point of the underground tank.
+    cube("PumpIsland", (-6.6,.12,-7.4), (1.15,.12,1.05), M["concrete"])
+    cube("PostMast", (-6.6,2.35,-8.5), (.13,2.35,.13), M["white"])
+    cube("PostArm", (-6.6,4.58,-7.95), (.09,.09,.66), M["white"])
+    cube("CanopyLightPost", (-6.6,4.46,-7.4), (1.08,.05,.46), M["cyan"], .02)
+    cube("PostSign", (-6.6,3.3,-8.62), (.52,.4,.06), M["red"], .05)
+    cube("PostSignBar", (-6.6,3.3,-8.69), (.3,.07,.03), M["yellow"], .015)
+    # Fill point: a hatch in a concrete pad, guarded from the driveway by bollards.
+    cube("TankPad", (-10.2,.09,-2.4), (1.45,.09,1.45), M["concrete"], .03)
+    cyl("TankHatch", (-10.2,.2,-2.4), .66, .1, M["chrome"], 12)
+    cyl("TankHatchRim", (-10.2,.17,-2.4), .74, .08, M["yellow"], 12)
+    cyl("TankCap", (-10.2,.29,-2.4), .2, .12, M["charcoal"], 8)
+    for x in (-11.5,-8.9):
+        cyl("TankBollard", (x,.5,-3.7), .11, 1.0, M["yellow"], 8)
+    cube("TankSignPost", (-11.5,.95,-2.4), (.06,.45,.06), M["chrome"], .02)
+    cube("TankSign", (-11.5,1.55,-2.4), (.06,.34,.52), M["red"], .04)
+    cube("TankSignMark", (-11.57,1.55,-2.4), (.02,.2,.3), M["yellow"], .02)
     # Sign and trash bin.
     cube("SignPost", (-6.6,2.2,-5.2), (.12,2.2,.12), M["chrome"])
     cube("RoadSign", (-6.6,4.25,-5.2), (1.15,1.0,.13), M["red"])
@@ -350,6 +368,42 @@ def make_van():
     export("mystery_van")
 
 
+def make_tanker():
+    """A fuel delivery truck: the barrel reads as a tanker even in a dark mirror."""
+    reset()
+    cube("TankerCab", (0,1.42,-2.3), (1.14,.76,.92), M["white"], .14)
+    cube("TankerRoof", (0,2.24,-2.3), (1.04,.08,.8), M["white"], .06)
+    cube("TankerNose", (0,.76,-3.16), (1.1,.44,.28), M["white"], .1)
+    cube("TankerGrille", (0,1.0,-3.2), (.88,.26,.05), M["charcoal"], .03)
+    cube("TankerBumper", (0,.48,-3.3), (1.14,.22,.12), M["chrome"], .05)
+    cube("TankerWindshield", (0,1.78,-3.18), (.9,.34,.04), M["glass"], .02)
+    for x in (-1.1,1.1):
+        cube("TankerSideWindow", (x,1.78,-2.35), (.03,.32,.5), M["glass"], .012)
+        cube("TankerMirror", (x*1.2,1.72,-3.05), (.07,.16,.05), M["charcoal"], .02)
+    cube("TankerChassis", (0,.62,.35), (.92,.16,2.95), M["charcoal"], .05)
+    cyl("TankerBarrel", (0,1.46,.5), .92, 3.4, M["chrome"], 14, rotation=(math.pi/2,0,0))
+    for z in (-1.24,2.24):
+        cyl("TankerBarrelCap", (0,1.46,z), .93, .1, M["white"], 14, rotation=(math.pi/2,0,0))
+    for z in (-.55,1.55):
+        cyl("TankerBand", (0,1.46,z), .95, .14, M["red"], 14, rotation=(math.pi/2,0,0))
+    cube("TankerWalk", (0,2.42,.5), (.34,.06,1.7), M["chrome"], .03)
+    cube("TankerHazardPlate", (0,1.32,2.34), (.48,.32,.06), M["yellow"], .04)
+    cube("TankerHazardBar", (0,1.32,2.29), (.3,.06,.03), M["charcoal"], .015)
+    # The valve cabinet faces the station: that is where the hose is taken from.
+    cube("TankerValveBox", (-1.0,.92,1.15), (.22,.4,.62), M["charcoal"], .05)
+    cyl("TankerHoseReel", (-1.16,1.02,1.15), .28, .2, M["red"], 10, rotation=(0,0,math.pi/2))
+    cyl("TankerHoseHub", (-1.24,1.02,1.15), .09, .24, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    cube("TankerLadder", (-1.02,1.5,2.0), (.05,.6,.3), M["chrome"], .02)
+    for x in (-1.02,1.02):
+        for z in (-2.35,1.0,2.05):
+            cyl("Wheel", (x,.45,z), .45, .26, M["black"], 12, rotation=(0,0,math.pi/2))
+            cyl("Hub", (x*1.02,.45,z), .16, .28, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    for x in (-.78,.78):
+        cube("Headlight", (x,.72,-3.32), (.2,.13,.035), M["yellow"], .04)
+        cube("TailLight", (x,.72,2.4), (.18,.12,.035), M["red"], .035)
+    export("tanker")
+
+
 def make_worker():
     reset()
     cyl("Body", (0,1.0,0), .38, 1.0, M["blue"], 8)
@@ -385,6 +439,7 @@ makers = {
     "pump": make_pump,
     "car": make_car,
     "mystery_van": make_van,
+    "tanker": make_tanker,
     "worker": make_worker,
     "props": make_props,
 }

@@ -7,7 +7,7 @@ import { SAVE_VERSION, migrateProgress } from '../src/content/progress.js';
 
 const required = ['index.html', 'src/main.js', 'src/gamepush.js', 'src/content/shifts.js', 'src/content/progress.js', 'src/content/levels.js',
   'public/models/station.glb', 'public/models/second_floor.glb', 'public/models/pump.glb', 'public/models/car.glb',
-  'public/models/mystery_van.glb', 'public/models/worker.glb', 'public/models/bag.glb', 'public/models/cleaning_kit.glb'];
+  'public/models/mystery_van.glb', 'public/models/tanker.glb', 'public/models/worker.glb', 'public/models/bag.glb', 'public/models/cleaning_kit.glb'];
 for (const file of required) {
   const path = resolve(file), stats = await stat(path);
   if (!stats.size) throw new Error(`${file} is empty`);

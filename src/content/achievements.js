@@ -15,6 +15,9 @@ export const TRACKED_STATS = Object.freeze({
   blackouts: 0,
   bags: 0,
   vans: 0,
+  tankers: 0,
+  hurried: 0,
+  rainNights: 0,
   served: 0,
   shifts: 0,
   flawless: 0,
@@ -43,14 +46,17 @@ export const ACHIEVEMENTS = Object.freeze([
   define({ id: 'electrician', icon: '⚡', name: 'Электрик', description: 'Пять раз перезапустить щиток', stat: 'blackouts', target: 5 }),
   define({ id: 'honest-find', icon: '🎒', name: 'Честная находка', description: 'Вернуть пять забытых сумок', stat: 'bags', target: 5 }),
   define({ id: 'nobody-inside', icon: '👁', name: 'Внутри никого', description: 'Проверить странный фургон', stat: 'vans', target: 1 }),
+  define({ id: 'delivery', icon: '🛢', name: 'Приёмка', description: 'Принять пять бензовозов', stat: 'tankers', target: 5 }),
 
   // Мастерство смены.
   define({ id: 'flawless', icon: '✨', name: 'Никого не упустил', description: 'Пройти уровень, не потеряв ни одного клиента', stat: 'flawless', target: 1 }),
   define({ id: 'flawless-five', icon: '💎', name: 'Пять безупречных', description: 'Пять уровней без потерянных клиентов', stat: 'flawless', target: 5 }),
   define({ id: 'clean-exam', icon: '🎓', name: 'Экзамен без потерь', description: 'Сдать экзамен, не потеряв ни одного клиента', stat: 'flawlessExams', target: 1 }),
   define({ id: 'rush-hour', icon: '🚦', name: 'Час пик', description: 'Пережить десять наплывов', stat: 'rushes', target: 10 }),
+  define({ id: 'no-waiting', icon: '⏱', name: 'Не задерживаю', description: 'Обслужить 15 спешащих клиентов', stat: 'hurried', target: 15 }),
+  define({ id: 'downpour', icon: '🌧', name: 'Под дождём', description: 'Отработать три смены в дождь', stat: 'rainNights', target: 3 }),
   define({ id: 'regular', icon: '🛣', name: 'Свой на трассе', description: 'Обслужить 100 клиентов', stat: 'served', target: 100 }),
-  define({ id: 'tanker', icon: '🛢', name: 'Цистерна', description: 'Заправить 50 машин', stat: 'refuels', target: 50 }),
+  define({ id: 'tanker', icon: '⛽', name: 'Цистерна', description: 'Заправить 50 машин', stat: 'refuels', target: 50 }),
 
   // Деньги.
   define({ id: 'good-night', icon: '📈', name: 'Удачная ночь', description: 'Заработать ₽800 за одну смену', stat: 'best', target: 800, format: money }),

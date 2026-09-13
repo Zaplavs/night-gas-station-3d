@@ -1,7 +1,8 @@
 import {
   CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
+  WEATHER, HURRY_PATIENCE, HURRY_PAYOUT,
   getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels, weatherOf, featureTags,
 } from './levels.js';
 
 export const PLAY_MODE = Object.freeze({
@@ -15,13 +16,14 @@ export const EVENT_TYPES = Object.freeze([
   'bag',
   'broken',
   'van',
+  'tanker',
   'whisper',
 ]);
 
 export {
-  CAMPAIGN_LEVELS, CHAPTERS, LEVELS_PER_CHAPTER,
+  CAMPAIGN_LEVELS, CHAPTERS, LEVELS_PER_CHAPTER, WEATHER, HURRY_PATIENCE, HURRY_PAYOUT,
   getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels, weatherOf, featureTags,
 };
 
 /* Кампания — это таблица уровней; смена и уровень здесь одно и то же. */
@@ -37,6 +39,8 @@ export function randomFromRange([min, max], random = Math.random) {
 export function createEndlessShift(round = 1) {
   const number = Math.max(1, Math.floor(Number(round) || 1));
   const pressure = Math.min(8, Math.max(0, number - 1));
+  // Погода идёт по кругу: подряд идущие ночи не должны выглядеть одинаково.
+  const weather = ['clear', 'rain', 'fog'][(number - 1) % 3];
 
   return Object.freeze({
     number,
@@ -57,10 +61,13 @@ export function createEndlessShift(round = 1) {
     }),
     queueSize: number > 3 ? 3 : 2,
     customerPatience: Math.max(34, 44 - pressure * 1.2),
+    hurryChance: Math.min(0.45, 0.2 + pressure * 0.03),
     orderIntensity: Math.min(0.9, 0.7 + pressure * 0.025),
     orderMenu: Object.freeze(['coffee', 'snack']),
     startStock: Object.freeze({ coffee: 2, snack: 2 }),
-    pumpsOnline: 2,
+    pumpsOnline: 3,
+    fuelReserve: 14,
+    weather,
     allowedEvents: EVENT_TYPES,
     eventSpawn: Object.freeze({
       initial: Object.freeze([20, 30]),

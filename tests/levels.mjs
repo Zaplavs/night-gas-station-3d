@@ -1,9 +1,9 @@
 /* Проверка кампании как данных: 30 уровней, честные цели, постепенное открытие
    механик и миграция старых сохранений. Браузер для этого не нужен. */
 import {
-  CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
+  CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER, WEATHER, HURRY_PATIENCE, HURRY_PAYOUT,
   getLevel, getChapter, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels, weatherOf, featureTags,
 } from '../src/content/levels.js';
 import { EVENT_TYPES, PLAY_MODE, createEndlessShift, getShiftConfig, isFinalCampaignShift } from '../src/content/shifts.js';
 import { migrateProgress, DEFAULT_PROGRESS, SAVE_VERSION, LEGACY_CAMPAIGN_LENGTH } from '../src/content/progress.js';
@@ -28,7 +28,32 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
   check(level.duration >= 150 && level.duration <= 400, `${at}: странная длительность ${level.duration}`);
   check(level.customerPatience > 20, `${at}: клиенты не могут ждать ${level.customerPatience}с`);
   check(level.queueSize >= 1 && level.queueSize <= 3, `${at}: очередь ${level.queueSize} вне диапазона`);
-  check(level.pumpsOnline === 1 || level.pumpsOnline === 2, `${at}: колонок в работе ${level.pumpsOnline}`);
+  check(level.pumpsOnline >= 1 && level.pumpsOnline <= 3, `${at}: колонок в работе ${level.pumpsOnline}`);
+  check(!!WEATHER[level.weather], `${at}: неизвестная погода ${level.weather}`);
+  check(weatherOf(level).id === level.weather, `${at}: погода не находится по уровню`);
+
+  // Спешащий клиент должен оставаться выполнимым: половина от и без того короткого окна — это уже предел.
+  check(level.hurryChance >= 0 && level.hurryChance <= 0.5, `${at}: доля спешащих ${level.hurryChance} вне разумного`);
+  if (level.hurryChance > 0) {
+    check(level.customerPatience * HURRY_PATIENCE >= 20,
+      `${at}: спешащий клиент прождёт всего ${Math.round(level.customerPatience * HURRY_PATIENCE)}с`);
+  }
+
+  // Топливо: где его считают, туда обязан приезжать бензовоз, и запаса с приёмками должно хватить на цель.
+  const tankerRuns = level.scripted.filter((entry) => entry.event === 'tanker').length;
+  if (level.fuelReserve !== null) {
+    check(level.fuelReserve > 0, `${at}: запас топлива ${level.fuelReserve}`);
+    check(level.allowedEvents.includes('tanker'), `${at}: топливо кончается, а бензовоз не разрешён`);
+    check(level.fuelReserve * (1 + tankerRuns) >= (level.goal.served ?? 0) + 2,
+      `${at}: запаса ${level.fuelReserve} и ${tankerRuns} приёмок не хватит на ${level.goal.served} машин`);
+  } else {
+    check(!level.allowedEvents.includes('tanker'), `${at}: бензовоз без учёта топлива приезжать не должен`);
+  }
+
+  // Метки для меню: ночь должна уметь объяснить, чем она отличается от соседних.
+  const tags = featureTags(level);
+  check(tags.length <= 4, `${at}: слишком много меток (${tags.length})`);
+  check(tags.length > 0, `${at}: ночь нечем описать в меню`);
   check(getChapter(level).number === level.chapter, `${at}: глава не находится по уровню`);
   check(getLevel(level.number) === level, `${at}: getLevel возвращает другой уровень`);
 
@@ -70,6 +95,7 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
     level.queueSize, level.pumpsOnline, level.orderIntensity, level.customerPatience,
     level.orderMenu.join('+'), level.startStock.coffee, level.startStock.snack,
     level.allowedEvents.join('+'), level.scripted.length, level.rushes.length,
+    level.weather, level.hurryChance, level.fuelReserve,
   ].join('|');
   check(signature !== seenSignatures[index - 1], `${at}: повторяет предыдущий уровень один в один`);
   seenSignatures.push(signature);
@@ -91,6 +117,21 @@ check(firstWith((l) => l.allowedEvents.includes('van')) === 19, 'Странны�
 check(firstWith((l) => l.allowedEvents.includes('blackout')) === 21, 'Отключение света — с 21 уровня');
 check(firstWith((l) => l.rushes.length > 0) === 5, 'Первый наплыв — на экзамене 5 уровня');
 check(firstWith((l) => l.rushes.length > 1) === 15, 'Две волны за смену — с 15 уровня');
+check(firstWith((l) => l.weather === 'rain') === 4, 'Первый дождь — на 4 уровне');
+check(firstWith((l) => l.weather === 'fog') === 9, 'Первый туман — на 9 уровне');
+check(firstWith((l) => l.pumpsOnline === 3) === 12, 'Третий пост открывается на 12 уровне');
+check(firstWith((l) => l.hurryChance > 0) === 13, 'Спешащие клиенты — с 13 уровня');
+check(firstWith((l) => l.fuelReserve !== null) === 18, 'Приёмка топлива — с 18 уровня');
+check(HURRY_PATIENCE < 1 && HURRY_PAYOUT > 1, 'Спешащий должен платить больше, а ждать меньше');
+
+/* Новые механики не должны включиться один раз и пропасть. */
+const countWith = (predicate) => CAMPAIGN_LEVELS.filter(predicate).length;
+check(countWith((l) => l.pumpsOnline === 3) >= 8, 'Третий пост должен работать на многих ночах');
+check(countWith((l) => l.fuelReserve !== null) >= 5, 'Приёмка топлива должна встречаться не однажды');
+check(countWith((l) => l.weather !== 'clear') >= 6, 'Погода должна меняться в течение кампании');
+check(countWith((l) => l.hurryChance > 0) >= 5, 'Спешащие клиенты должны встречаться не однажды');
+check(new Set(CAMPAIGN_LEVELS.map((l) => featureTags(l).join(','))).size >= 12,
+  'Ночи не должны описываться одним и тем же набором меток');
 
 /* Экзамен должен быть заметно тяжелее предыдущей четвёрки уровней. */
 EXAMS.forEach((number) => {
@@ -103,6 +144,8 @@ EXAMS.forEach((number) => {
 
 /* Финал должен собирать механики вместе. */
 const final = getLevel(30);
+check(final.pumpsOnline === 3 && final.fuelReserve !== null && final.hurryChance > 0 && final.weather !== 'clear',
+  'Финал: должен собрать вместе посты, топливо, спешащих и погоду');
 check(final.rushes.length >= 3, 'Финал: нужно несколько волн');
 check(final.scripted.length >= 3, 'Финал: нужны гарантированные события');
 check(final.allowedEvents.length === EVENT_TYPES.length, 'Финал: должны быть доступны все события');
@@ -158,9 +201,13 @@ const endless = createEndlessShift(4);
 check(endless.mode === PLAY_MODE.ENDLESS, 'Бесконечный режим должен помечаться своим режимом');
 check(Object.keys(endless.goal).length === 0, 'В бесконечном режиме целей нет');
 check(evaluateGoal(endless.goal, { served: 0, lost: 99, rep: 1, earned: 0 }).passed, 'Бесконечный режим нельзя провалить');
-['duration', 'carSpawn', 'queueSize', 'customerPatience', 'orderIntensity', 'orderMenu', 'startStock', 'pumpsOnline', 'allowedEvents', 'eventSpawn', 'scripted', 'rushes', 'name', 'brief']
+['duration', 'carSpawn', 'queueSize', 'customerPatience', 'orderIntensity', 'orderMenu', 'startStock', 'pumpsOnline',
+  'fuelReserve', 'weather', 'hurryChance', 'allowedEvents', 'eventSpawn', 'scripted', 'rushes', 'name', 'brief']
   .forEach((key) => check(endless[key] !== undefined, `Бесконечный режим: не хватает поля ${key}`));
 check(createEndlessShift(9).carSpawn.interval[0] < createEndlessShift(1).carSpawn.interval[0], 'Бесконечный режим должен уплотняться');
+check(new Set([1, 2, 3].map((round) => createEndlessShift(round).weather)).size === 3, 'В бесконечном режиме погода должна меняться');
+check(createEndlessShift(2).allowedEvents.includes('tanker') && createEndlessShift(2).fuelReserve > 0,
+  'Бесконечный режим не должен терять приёмку топлива');
 check(getShiftConfig(3, PLAY_MODE.ENDLESS).mode === PLAY_MODE.ENDLESS, 'getShiftConfig должен отдавать бесконечный режим');
 check(getShiftConfig(31).number === 30, 'Запрос уровня за пределами кампании должен упираться в последний');
 

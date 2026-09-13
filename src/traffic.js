@@ -119,10 +119,11 @@ export function drive(vehicle,dt){
   const rotationY=Math.atan2(-TMP.x,-TMP.z)+(p.reverse?Math.PI:0);
   // Сервисные машины могут отменить шаг, если следующий объём кузова займёт игрок.
   if(vehicle.canAdvance&&!vehicle.canAdvance({position:NEXT,rotationY,from:vehicle.group.position,distance:nextDist})){
-    vehicle.blocked=true;vehicle.speed=Math.max(0,vehicle.speed-14*dt);
+    vehicle.blocked=true;vehicle.stall=(vehicle.stall||0)+dt;vehicle.speed=Math.max(0,vehicle.speed-14*dt);
     vehicle.lights?.set({beam:vehicle.speed>.15,brake:true,reverse:!!p.reverse});return false;
   }
-  vehicle.blocked=false;vehicle.speed=nextSpeed;vehicle.dist=nextDist;vehicle.t=nextT;
+  // Простой считается по фактическому движению: ползущая в заторе машина тоже стоит.
+  vehicle.blocked=false;vehicle.stall=nextSpeed>.6?0:(vehicle.stall||0)+dt;vehicle.speed=nextSpeed;vehicle.dist=nextDist;vehicle.t=nextT;
   vehicle.group.position.copy(NEXT);vehicle.group.rotation.y=rotationY;
   vehicle.lights?.set({beam:vehicle.speed>.15,brake:braking||vehicle.speed<.5,reverse:!!p.reverse});
   return vehicle.dist>=p.len-1e-4;
