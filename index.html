@@ -25,6 +25,8 @@
   </header>
 
   <aside id="tasks" class="hidden">
+    <div id="level-head"><span class="eyebrow">УРОВЕНЬ</span><b id="level-name">1. Первая заправка</b></div>
+    <div id="level-goal" aria-label="Цель уровня"></div>
     <div class="eyebrow">ТЕКУЩИЕ ДЕЛА</div>
     <div id="stock-status" aria-label="Запасы магазина">
       <span>☕ КОФЕ <b id="stock-coffee">5/5</b></span>
@@ -77,7 +79,7 @@
       <div class="tutorial-grid">
         <div><b>01</b><span>Осматривайся мышью, ходи на <strong>WASD</strong>, прыгай на <strong>Space</strong></span></div>
         <div><b>02</b><span>Подойди к цели и удерживай <strong>E</strong></span></div>
-        <div><b>03</b><span>Кнопка <strong>«Обучение»</strong> всегда покажет карту</span></div>
+        <div><b>03</b><span>Цель ночи — слева, в панели дел. Не выполнил — уровень повторяется</span></div>
       </div>
       <p>Здесь бывает странно, но по-настоящему опасно — почти никогда.</p>
       <button id="tutorial-start" class="primary">ОТКРЫТЬ СМЕНУ <span>→</span></button>
@@ -106,14 +108,15 @@
 
   <section id="event-card" class="event-card hidden">
     <div class="event-icon" id="event-icon">!</div>
-    <div><span>НОЧНОЕ СОБЫТИЕ</span><h3 id="event-title"></h3><p id="event-text"></p></div>
+    <div><span id="event-kind">НОЧНОЕ СОБЫТИЕ</span><h3 id="event-title"></h3><p id="event-text"></p></div>
   </section>
 
   <section id="results" class="screen modal-screen hidden">
     <div class="dialog results-card">
-      <p class="eyebrow">РАССВЕТ · СМЕНА ЗАКРЫТА</p>
+      <p class="eyebrow" id="result-eyebrow">РАССВЕТ · СМЕНА ЗАКРЫТА</p>
       <h2 id="result-title">Неплохая ночка.</h2>
       <div class="result-row"><div><small>ЗАРАБОТАНО</small><b id="result-money">₽0</b></div><div><small>ОБСЛУЖЕНО</small><b id="result-served">0</b></div><div><small>РЕПУТАЦИЯ</small><b id="result-rep">3.0★</b></div><div><small>РЕКОРД</small><b id="result-best">₽0</b></div></div>
+      <div id="result-goal"></div>
       <div class="upgrades">
         <p>УЛУЧШЕНИЯ НА СЛЕДУЮЩУЮ СМЕНУ</p>
         <button data-upgrade="speed"><span>Быстрые кроссовки<small>Скорость +12%</small></span><b>₽200</b></button>
@@ -136,7 +139,8 @@
         <div><small>КЛИЕНТОВ</small><b id="campaign-served">0</b></div>
         <div><small>ЛУЧШАЯ СМЕНА</small><b id="campaign-best">₽0</b></div>
       </div>
-      <button id="campaign-restart" class="primary">НАЧАТЬ КАМПАНИЮ ЗАНОВО <span>↻</span></button>
+      <button id="campaign-endless" class="primary">БЕСКОНЕЧНЫЙ РЕЖИМ <span>∞</span></button>
+      <button id="campaign-restart" class="secondary">НАЧАТЬ КАМПАНИЮ ЗАНОВО <span>↻</span></button>
       <button id="campaign-menu" class="text-btn">В главное меню</button>
     </div>
   </section>

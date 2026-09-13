@@ -1,3 +1,9 @@
+import {
+  CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
+  getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
+  activeRush, dueScripted,
+} from './levels.js';
+
 export const PLAY_MODE = Object.freeze({
   CAMPAIGN: 'campaign',
   ENDLESS: 'endless',
@@ -12,148 +18,74 @@ export const EVENT_TYPES = Object.freeze([
   'whisper',
 ]);
 
-const freezeRange = (range) => Object.freeze([...range]);
+export {
+  CAMPAIGN_LEVELS, CHAPTERS, LEVELS_PER_CHAPTER,
+  getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
+  activeRush, dueScripted,
+};
 
-const defineShift = ({
-  number,
-  duration,
-  carSpawn,
-  queueSize,
-  customerPatience,
-  allowedEvents,
-  eventSpawn,
-  orderIntensity,
-  mode = PLAY_MODE.CAMPAIGN,
-}) => Object.freeze({
-  number,
-  mode,
-  duration,
-  carSpawn: Object.freeze({
-    initialDelay: carSpawn.initialDelay,
-    interval: freezeRange(carSpawn.interval),
-    queueRetry: carSpawn.queueRetry ?? 2.5,
-  }),
-  queueSize,
-  customerPatience,
-  allowedEvents: Object.freeze([...allowedEvents]),
-  eventSpawn: Object.freeze({
-    initial: freezeRange(eventSpawn.initial),
-    interval: freezeRange(eventSpawn.interval),
-  }),
-  orderIntensity,
-});
-
-export const CAMPAIGN_SHIFTS = Object.freeze([
-  defineShift({
-    number: 1,
-    duration: 210,
-    carSpawn: { initialDelay: 0.8, interval: [20, 28] },
-    queueSize: 1,
-    customerPatience: 46,
-    allowedEvents: ['spill', 'bag', 'whisper'],
-    eventSpawn: { initial: [28, 36], interval: [42, 56] },
-    orderIntensity: 0.35,
-  }),
-  defineShift({
-    number: 2,
-    duration: 225,
-    carSpawn: { initialDelay: 0.8, interval: [18, 25] },
-    queueSize: 1,
-    customerPatience: 44,
-    allowedEvents: ['spill', 'bag', 'broken', 'whisper'],
-    eventSpawn: { initial: [26, 34], interval: [39, 52] },
-    orderIntensity: 0.45,
-  }),
-  defineShift({
-    number: 3,
-    duration: 240,
-    carSpawn: { initialDelay: 0.7, interval: [16, 23] },
-    queueSize: 2,
-    customerPatience: 42,
-    allowedEvents: ['spill', 'blackout', 'bag', 'broken', 'whisper'],
-    eventSpawn: { initial: [24, 32], interval: [36, 49] },
-    orderIntensity: 0.52,
-  }),
-  defineShift({
-    number: 4,
-    duration: 240,
-    carSpawn: { initialDelay: 0.7, interval: [14, 21] },
-    queueSize: 2,
-    customerPatience: 40,
-    allowedEvents: ['spill', 'blackout', 'bag', 'broken', 'van', 'whisper'],
-    eventSpawn: { initial: [22, 30], interval: [34, 46] },
-    orderIntensity: 0.6,
-  }),
-  defineShift({
-    number: 5,
-    duration: 255,
-    carSpawn: { initialDelay: 0.6, interval: [12.5, 19] },
-    queueSize: 2,
-    customerPatience: 38,
-    allowedEvents: EVENT_TYPES,
-    eventSpawn: { initial: [20, 28], interval: [31, 43] },
-    orderIntensity: 0.68,
-  }),
-  defineShift({
-    number: 6,
-    duration: 255,
-    carSpawn: { initialDelay: 0.6, interval: [11, 17] },
-    queueSize: 2,
-    customerPatience: 36,
-    allowedEvents: EVENT_TYPES,
-    eventSpawn: { initial: [18, 26], interval: [28, 40] },
-    orderIntensity: 0.76,
-  }),
-  defineShift({
-    number: 7,
-    duration: 300,
-    carSpawn: { initialDelay: 0.5, interval: [9.5, 15] },
-    queueSize: 2,
-    customerPatience: 34,
-    allowedEvents: EVENT_TYPES,
-    eventSpawn: { initial: [16, 24], interval: [25, 37] },
-    orderIntensity: 0.85,
-  }),
-]);
-
-export const CAMPAIGN_SHIFT_COUNT = CAMPAIGN_SHIFTS.length;
+/* Кампания — это таблица уровней; смена и уровень здесь одно и то же. */
+export const CAMPAIGN_SHIFTS = CAMPAIGN_LEVELS;
+export const CAMPAIGN_SHIFT_COUNT = CAMPAIGN_LEVEL_COUNT;
 
 export function randomFromRange([min, max], random = Math.random) {
   return min + (max - min) * random();
 }
 
+/* Бесконечный режим включается после 30-го уровня и живёт по тем же полям,
+   только без цели: играют на счёт, пока не кончится ночь. */
 export function createEndlessShift(round = 1) {
   const number = Math.max(1, Math.floor(Number(round) || 1));
-  const pressure = Math.min(6, Math.max(0, number - 1));
+  const pressure = Math.min(8, Math.max(0, number - 1));
 
-  return defineShift({
+  return Object.freeze({
     number,
+    chapter: CHAPTERS.length,
+    name: `Бесконечная ночь ${number}`,
+    brief: 'Цели нет — работайте, пока не рассветёт, и держите репутацию.',
+    exam: false,
     mode: PLAY_MODE.ENDLESS,
     duration: 300,
-    carSpawn: {
-      initialDelay: 0.5,
-      interval: [Math.max(7, 9.5 - pressure * 0.35), Math.max(11, 15 - pressure * 0.5)],
+    goal: Object.freeze({}),
+    carSpawn: Object.freeze({
+      initialDelay: 0.6,
+      interval: Object.freeze([
+        Math.max(6.5, 11 - pressure * 0.45),
+        Math.max(9.5, 15 - pressure * 0.6),
+      ]),
       queueRetry: 2,
-    },
-    queueSize: 2,
-    customerPatience: Math.max(27, 34 - pressure),
+    }),
+    queueSize: number > 3 ? 3 : 2,
+    customerPatience: Math.max(34, 44 - pressure * 1.2),
+    orderIntensity: Math.min(0.9, 0.7 + pressure * 0.025),
+    orderMenu: Object.freeze(['coffee', 'snack']),
+    startStock: Object.freeze({ coffee: 2, snack: 2 }),
+    pumpsOnline: 2,
     allowedEvents: EVENT_TYPES,
-    eventSpawn: {
-      initial: [14, 22],
-      interval: [Math.max(20, 25 - pressure), Math.max(30, 37 - pressure)],
-    },
-    orderIntensity: Math.min(0.95, 0.85 + pressure * 0.015),
+    eventSpawn: Object.freeze({
+      initial: Object.freeze([20, 30]),
+      interval: Object.freeze([
+        Math.max(26, 40 - pressure * 1.6),
+        Math.max(36, 54 - pressure * 2),
+      ]),
+    }),
+    scripted: Object.freeze([]),
+    rushes: Object.freeze([
+      Object.freeze({
+        id: `endless-${number}-rush`,
+        at: 110,
+        duration: 40,
+        interval: Object.freeze([Math.max(5, 7 - pressure * 0.2), Math.max(7.5, 9.5 - pressure * 0.25)]),
+        queueBoost: 2,
+        label: 'Наплыв',
+      }),
+    ]),
   });
 }
 
 export function getShiftConfig(number, mode = PLAY_MODE.CAMPAIGN) {
   if (mode === PLAY_MODE.ENDLESS) return createEndlessShift(number);
-
-  const index = Math.max(0, Math.min(
-    CAMPAIGN_SHIFT_COUNT - 1,
-    Math.floor(Number(number) || 1) - 1,
-  ));
-  return CAMPAIGN_SHIFTS[index];
+  return getLevel(number);
 }
 
 export function isFinalCampaignShift(config) {

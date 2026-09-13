@@ -283,19 +283,105 @@ const jumpButton=await page.evaluate(()=>{const g=window.__nightStation,button=d
 if(Object.values(jumpButton).some(v=>!v))throw new Error(`Mobile jump button failed: ${JSON.stringify(jumpButton)}`);
 await page.waitForTimeout(400);await page.screenshot({path:'artifacts/gameplay.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='mop';g.updateCarry()});await page.waitForTimeout(500);await page.screenshot({path:'artifacts/hands.png'});await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
-await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 4')throw new Error('Guide navigation failed');await page.click('#guide-close');
-const campaign=await page.evaluate(()=>{const g=window.__nightStation;
-  g.setState({money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99});
-  const migrated=g.state.saveVersion===2&&g.state.shift===7&&g.state.campaignComplete&&g.state.money===321&&g.state.upgrades.speed===2;
-  g.setState({money:500,shift:7,rep:4.4,upgrades:{speed:1,service:1,coffee:1},tutorial:true,sound:true,musicVolume:80,best:120,campaignEarnings:900,campaignServed:12});g.startShift();
-  const configured=g.shiftLength===300&&g.shiftConfig.number===7&&g.shiftConfig.queueSize===2&&g.shiftConfig.allowedEvents.length===6&&document.querySelector('#shift-label').textContent==='СМЕНА 7 / 7';
-  g.state.money+=123;g.served=4;g.finishShift();
-  return{migrated,configured,complete:g.state.campaignComplete&&g.state.shift===7,totals:g.state.campaignEarnings===1023&&g.state.campaignServed===16,finalButton:document.querySelector('#next-shift').textContent.includes('ЗАВЕРШИТЬ КАМПАНИЮ'),upgradesHidden:document.querySelector('.upgrades').classList.contains('hidden')};});
-if(Object.values(campaign).some(v=>!v))throw new Error(`Seven-shift campaign failed: ${JSON.stringify(campaign)}`);
+await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 5')throw new Error('Guide navigation failed');await page.click('#guide-close');
+const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  // Сейв семисменной кампании продолжается с восьмого уровня, а не считается пройденным.
+  g.setState({saveVersion:2,money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99,campaignComplete:true});
+  out.legacyContinues=g.state.saveVersion===3&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321&&g.state.upgrades.speed===2;
+  g.setState({saveVersion:3,money:500,shift:1,rep:3,tutorial:true,sound:true,musicVolume:80,best:0,levelsCleared:0,campaignComplete:false,campaignEarnings:0,campaignServed:0});
+  g.startShift();
+  out.levelFromData=g.shiftConfig.number===1&&g.shiftLength===170&&g.shiftConfig.orderIntensity===0&&g.shiftConfig.allowedEvents.length===0&&g.shiftConfig.queueSize===1;
+  out.hudShowsLevel=document.querySelector('#shift-label').textContent==='УРОВЕНЬ 1 / 30'&&document.querySelector('#level-name').textContent.includes('Первая заправка');
+  out.hudShowsGoal=document.querySelector('#level-goal').textContent.includes('0 / 3');
+  // Цель не выполнена: уровень не зачтён, причина названа, уровень остаётся прежним.
+  g.served=1;g.finishShift();
+  out.failKeepsLevel=g.state.shift===1&&g.state.levelsCleared===0&&g.levelResult.passed===false;
+  out.failExplained=document.querySelector('#result-goal').textContent.includes('1 из 3')&&document.querySelector('#result-eyebrow').textContent.includes('НЕ ЗАЧТЁН');
+  out.retryOffered=document.querySelector('#next-shift').textContent.includes('ПОВТОРИТЬ');
+  // Цель выполнена: уровень зачтён и открывается следующий.
+  g.startShift();g.served=3;g.state.money+=200;g.finishShift();
+  out.passAdvances=g.state.shift===2&&g.state.levelsCleared===1&&g.levelResult.passed===true;
+  out.passExplained=document.querySelector('#result-eyebrow').textContent.includes('ПРОЙДЕН')&&document.querySelector('#next-shift').textContent.includes('СЛЕДУЮЩИЙ');
+  return out;});
+if(Object.values(campaign).some(v=>!v))throw new Error(`Campaign level flow failed: ${JSON.stringify(campaign)}`);
+const levelRules=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const startLevel=number=>{g.setState({...g.state,shift:number,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[]};
+  // Механики открываются данными уровня: на первом уровне заказов нет вообще.
+  startLevel(1);out.firstLevelHasNoOrders=g.shiftConfig.orderMenu.length===0&&g.shiftConfig.startStock.coffee===5;
+  startLevel(3);out.coffeeOnly=g.shiftConfig.orderMenu.join()==='coffee';
+  startLevel(6);out.foodUnlocked=g.shiftConfig.orderMenu.join()==='coffee,snack';
+  // Пустой склад с порога ставит задачу пополнения, а не молчит.
+  startLevel(30);
+  out.emptyStockQueued=g.stock.coffee===0&&g.stock.snack===0&&g.jobs.some(j=>j.tag==='restock-coffee-pick')&&g.jobs.some(j=>j.tag==='restock-snack-pick');
+  out.finalCombines=g.shiftConfig.rushes.length===3&&g.shiftConfig.scripted.length===4&&Object.keys(g.shiftConfig.goal).length===3;
+  // Закрытая колонка помечена табличкой и не берёт машины.
+  startLevel(17);
+  out.pumpClosed=g.pumps[1].closed===true&&g.pumps[1].broken===true&&g.closedSigns[1].visible===true&&g.closedSigns[0].visible===false;
+  g.spawnCar();const queued=g.cars.at(-1);
+  for(let i=0;i<1800&&queued.status!=='waiting';i++)g.updateCars(.05);
+  out.onlyOpenPumpServes=queued.pump===g.pumps[0];
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  for(let i=0;i<12;i++)g.runEvent('broken');
+  out.closedPumpNeverRepaired=g.pumps[1].closed===true&&!g.jobs.some(j=>j.tag==='broken'&&g.jobLabel(j).includes('2'));
+  startLevel(1);
+  // Наплыв: очередь длиннее и машины идут чаще, но только в своё окно.
+  startLevel(5);
+  const rush=g.shiftConfig.rushes[0],baseLimit=g.queueLimit();
+  g.elapsed=rush.at+1;g.updateSchedule();
+  out.rushStarts=g.currentRush===rush&&g.queueLimit()===baseLimit+rush.queueBoost&&rush.interval[0]<g.shiftConfig.carSpawn.interval[0];
+  g.elapsed=rush.at+rush.duration+2;g.updateSchedule();
+  out.rushEnds=g.currentRush===null&&g.queueLimit()===baseLimit;
+  // Сценарное событие происходит гарантированно и ровно один раз.
+  startLevel(21);
+  const scripted=g.shiftConfig.scripted[0];
+  g.elapsed=scripted.at-1;g.updateSchedule();
+  out.scriptedWaits=!g.blackout&&g.scriptedFired.size===0;
+  g.elapsed=scripted.at+.5;g.updateSchedule();
+  out.scriptedFires=g.blackout===true&&g.scriptedFired.has(scripted.id);
+  const panels=g.jobs.filter(j=>j.tag==='blackout').length;g.updateSchedule();
+  out.scriptedOnce=g.jobs.filter(j=>j.tag==='blackout').length===panels;
+  // Пока свет не починили, второй blackout не накладывается поверх первого.
+  out.noDoubleBlackout=g.canRunEvent('blackout')===false;
+  g.jobs.filter(j=>j.tag==='blackout').forEach(j=>{j.onComplete();g.removeJob(j)});
+  out.lightRestored=!g.blackout&&g.canRunEvent('blackout')===true;
+  startLevel(1);g.player.position.set(0,.26,-3.35);g.updatePlayer(0);
+  return out;});
+if(Object.values(levelRules).some(v=>!v))throw new Error(`Level rules failed: ${JSON.stringify(levelRules)}`);
+const hardFail=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  g.setState({...g.state,shift:5,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  out.limitDeclared=g.shiftConfig.goal.maxLost===1;
+  const parkOne=()=>{if(!g.spawnCar())return null;const car=g.cars.at(-1);for(let i=0;i<1800&&car.status!=='waiting';i++)g.updateCars(.05);return car};
+  const expire=car=>{const job=g.jobs.find(j=>j.car===car&&j.patience!=null);if(!job)return false;job.patience=.001;g.updateJobs(.05);return true};
+  const first=parkOne();out.firstParked=!!first&&first.status==='waiting';
+  out.firstLost=expire(first)&&g.lost===1&&!g.levelResult;
+  const second=parkOne();out.secondParked=!!second&&second.status==='waiting';
+  out.limitBreached=expire(second)&&g.lost===2&&!!g.levelResult&&g.levelResult.passed===false&&g.levelResult.failures[0].includes('Упущено');
+  g.updatePlay(.016);
+  out.shiftClosedEarly=g.mode==='results'&&document.querySelector('#result-goal').textContent.includes('Упущено');
+  return out;});
+if(Object.values(hardFail).some(v=>!v))throw new Error(`Early failure failed: ${JSON.stringify(hardFail)}`);
+const finalLevel=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  g.setState({...g.state,shift:30,campaignComplete:false,levelsCleared:29,campaignEarnings:900,campaignServed:12,money:500});
+  g.startShift();g.served=2;g.finishShift();
+  out.finalNeedsGoal=!g.state.campaignComplete&&g.state.shift===30;
+  g.startShift();g.served=g.shiftConfig.goal.served;g.lost=0;g.state.rep=4;g.state.money+=999;g.finishShift();
+  out.campaignDone=g.state.campaignComplete===true&&g.state.levelsCleared===30;
+  out.finalButton=document.querySelector('#next-shift').textContent.includes('ЗАВЕРШИТЬ');
+  out.totals=g.state.campaignServed===12+2+g.shiftConfig.goal.served&&g.state.campaignEarnings>=999;
+  return out;});
+if(Object.values(finalLevel).some(v=>!v))throw new Error(`Final level failed: ${JSON.stringify(finalLevel)}`);
 await page.click('#next-shift');await page.locator('#campaign-complete:not(.hidden)').waitFor();
-const finale=await page.evaluate(()=>({mode:window.__nightStation.mode,earned:document.querySelector('#campaign-earned').textContent,served:document.querySelector('#campaign-served').textContent,restart:!!document.querySelector('#campaign-restart')}));
-if(finale.mode!=='campaign-complete'||finale.earned!=='₽1023'||finale.served!=='16'||!finale.restart)throw new Error(`Campaign completion screen failed: ${JSON.stringify(finale)}`);
+const finale=await page.evaluate(()=>({mode:window.__nightStation.mode,served:document.querySelector('#campaign-served').textContent,restart:!!document.querySelector('#campaign-restart'),endless:!!document.querySelector('#campaign-endless')}));
+if(finale.mode!=='campaign-complete'||!finale.restart||!finale.endless)throw new Error(`Campaign completion screen failed: ${JSON.stringify(finale)}`);
 await page.screenshot({path:'artifacts/campaign-complete.png'});
+await page.click('#campaign-endless');
+const endlessMode=await page.evaluate(()=>{const g=window.__nightStation;return{
+  playing:g.mode==='playing',endless:g.state.playMode==='endless',round:g.shiftConfig.number===1,
+  label:document.querySelector('#shift-label').textContent.includes('БЕСКОНЕЧНАЯ'),
+  noGoal:document.querySelector('#level-goal').textContent.includes('Без цели'),
+  keepsMoney:g.state.money>=500,unfailable:!g.levelResult};});
+if(Object.values(endlessMode).some(v=>!v))throw new Error(`Endless mode failed: ${JSON.stringify(endlessMode)}`);
 if(errors.length)throw new Error(`Runtime errors: ${errors.join(' | ')}`);
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -304,4 +390,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: two-floor stock loop, FIFO customer queue, campaign, player/vehicle safety, fuel flow and road traffic are working.');await browser.close();
+console.log('E2E passed: 30-level campaign with goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
