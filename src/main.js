@@ -19,10 +19,10 @@ const isTouch=matchMedia('(pointer:coarse)').matches;
 const SLOT_Z=-7.4,SLOT_OFFSET=2.3,VAN_SLOT={x:7.6,z:-7.4};
 const VEHICLE_STATE=Object.freeze({ENTERING:'entering',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
 const PLAYER_RADIUS=.36,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12;
-const MOP_SPOT=new THREE.Vector3(-3.65,.25,-2.08),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
+const MOP_SPOT=new THREE.Vector3(0,.25,2.85),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
 const COFFEE_SPOT=new THREE.Vector3(-1.75,.2,-.7),FOOD_SPOT=new THREE.Vector3(1.75,.2,-.7),FUSE_SPOT=new THREE.Vector3(-4.2,.2,2.2),LOST_SPOT=new THREE.Vector3(3.75,.2,2),STOCK_PICK_SPOT=new THREE.Vector3(-2.75,.2,3.18),STOCK_SHELF_SPOT=new THREE.Vector3(2,.2,3.8);
 const STOW_NOTE={mop:'Швабра вернулась на место',tools:'Инструменты вернулись в ящик'};
-const NEED_HINT={mop:'Сначала возьмите швабру у входа',tools:'Сначала возьмите инструменты в магазине',hose:'Сначала снимите пистолет с нужной колонки'};
+const NEED_HINT={mop:'Сначала возьмите швабру за прилавком',tools:'Сначала возьмите инструменты в магазине',hose:'Сначала снимите пистолет с нужной колонки'};
 const CARRY_NAMES={coffee:'Кофе',snack:'Сэндвич',box:'Коробка товара',bag:'Забытая сумка',mop:'Швабра',tools:'Инструменты',hose:'Заправочный пистолет'};
 
 class NightStationGame{
@@ -160,7 +160,7 @@ class NightStationGame{
     const r=PLAYER_RADIUS;if(x<-9.2+r||x>9.2-r||z<-13.2+r||z>4.55-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
     const fixed=[[-4.95,4.95,4.7,5.05],[-4.92,-4.44,-2.7,5.05],[4.44,4.92,-2.7,5.05],[-4.72,-1.27,-2.72,-2.5],[1.27,4.72,-2.72,-2.5],[-3.12,3.12,-1.23,.13],[-3.5,3.5,3.72,4.68],[-2.55-.73,-2.55+.73,-8.15,-6.65],[2.55-.73,2.55+.73,-8.15,-6.65]];if(fixed.some(a=>hitRect(...a)))return true;
     if(this.doorGlass.some(door=>hitRect(door.position.x-.6,door.position.x+.6,-2.74,-2.58)))return true;
-    const circles=[[-6.6,-5.2,.3],[3.75,-1.95,.43],[-3.4,-2,.5],[3.75,2,.58],[-2.75,3.18,.46]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
+    const circles=[[-6.6,-5.2,.3],[-3.82,3.05,.43],[.25,2.93,.5],[3.75,2,.58],[-2.75,3.18,.46]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
     for(const c of this.cars){if(c!==ignoreVehicle&&this.pointInVehicle(x,z,c,PLAYER_RADIUS))return true}if(this.specialVan&&this.specialVan!==ignoreVehicle&&this.pointInVehicle(x,z,this.specialVan,PLAYER_RADIUS))return true;return false
   }
   pointInVehicle(x,z,vehicle,margin=0,position=vehicle.group.position,rotationY=vehicle.group.rotation.y){
@@ -315,7 +315,7 @@ class NightStationGame{
   spawnSpill(){
     const p=new THREE.Vector3(-3+Math.random()*6,.255,-1+Math.random()*4),visual=new THREE.Group(),coffee=new THREE.MeshBasicMaterial({color:0x6b2f1b,transparent:true,opacity:.94,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),shine=new THREE.MeshBasicMaterial({color:0xc7783e,transparent:true,opacity:.7,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3});
     [[0,0,.68,coffee],[-.48,.08,.28,coffee],[.43,-.18,.22,coffee],[.14,.3,.13,shine],[-.2,-.13,.09,shine]].forEach(([x,z,r,material],i)=>{const drop=new THREE.Mesh(new THREE.CircleGeometry(r,12),material);drop.name=i?'CoffeeDrop':'CoffeeSpill';drop.rotation.x=-Math.PI/2;drop.position.set(x,i*.001,z);drop.scale.set(1,i?.68:.82,1);drop.renderOrder=3;visual.add(drop)});visual.position.copy(p);this.scene.add(visual);
-    this.eventNotice('≋','Кто-то разлил кофе','Пол становится липким. Швабра стоит у входа.');this.addJob({tag:'spill',need:'mop',title:'Уберите пятно',sub:'Швабра стоит у входа в магазин',pos:()=>p,duration:2.2,visual,onProgress:value=>{const size=Math.max(.12,1-value*.88);visual.scale.setScalar(size);visual.children.forEach((drop,i)=>drop.material.opacity=(i>2?.7:.94)*(.45+.55*(1-value)))},onComplete:()=>{this.state.money+=25;this.toast('Чисто! <b>+₽25</b>');audio.success();this.stowTool()}})
+    this.eventNotice('≋','Кто-то разлил кофе','Пол становится липким. Швабра стоит внутри, за прилавком.');this.addJob({tag:'spill',need:'mop',title:'Уберите пятно',sub:'Швабра стоит внутри, за прилавком',pos:()=>p,duration:2.2,visual,onProgress:value=>{const size=Math.max(.12,1-value*.88);visual.scale.setScalar(size);visual.children.forEach((drop,i)=>drop.material.opacity=(i>2?.7:.94)*(.45+.55*(1-value)))},onComplete:()=>{this.state.money+=25;this.toast('Чисто! <b>+₽25</b>');audio.success();this.stowTool()}})
   }
   eventBlackout(){
     if(this.blackout)return;this.blackout=true;this.nearest?.onProgress?.(0);this.actionProgress=0;this.actionLatched=false;
@@ -342,7 +342,7 @@ class NightStationGame{
   updateCarry(){ui.carrying.classList.toggle('hidden',!this.carry);$('#carrying b').textContent=CARRY_NAMES[this.carry]||'';this.hands.set(this.carry)}
   /* Швабру и инструмент можно взять и вернуть в любой момент; если нужны руки, они уходят на место сами. */
   addStandJobs(){
-    this.addJob({tag:'stand-mop',hidden:true,sub:'Инвентарь уборщика у входа',duration:.55,pos:()=>MOP_SPOT,
+    this.addJob({tag:'stand-mop',hidden:true,sub:'Инвентарь уборщика за прилавком',duration:.55,pos:()=>MOP_SPOT,
       title:()=>this.carry==='mop'?'Верните швабру':'Возьмите швабру',
       onComplete:()=>{if(this.carry==='mop')this.stowTool();else if(this.freeHands()){this.carry='mop';this.kitMop.forEach(m=>m.visible=false);this.updateCarry();audio.tone(330,.09,'square',.12)}return false}});
     this.addJob({tag:'stand-tools',hidden:true,sub:'Ящик у левой стены магазина',duration:.55,pos:()=>TOOL_SPOT,

@@ -214,8 +214,8 @@ def make_station():
     cube("SignPost", (-6.6,2.2,-5.2), (.12,2.2,.12), M["chrome"])
     cube("RoadSign", (-6.6,4.25,-5.2), (1.15,1.0,.13), M["red"])
     number_24("RoadSign24", (-6.6,4.34,-5.36), 1.15, mirror=True)
-    # Keep the entrance bin behind the glazing and clear of the outer wall.
-    cyl("TrashBin", (3.75,.55,-1.95), .43, 1.1, M["green"], 10)
+    # The bin lives in the rear corner so both routes around the counter stay open.
+    cyl("TrashBin", (-3.82,.55,3.05), .43, 1.1, M["green"], 10)
     export("station")
 
 

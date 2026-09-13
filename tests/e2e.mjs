@@ -24,6 +24,8 @@ const doors=await page.evaluate(()=>{const g=window.__nightStation;
   g.player.position.set(0,.26,-1.5);for(let i=0;i<10;i++)g.updateDoors(.05);const staysOpenInside=g.doorOpen===1;
   return{twoLeaves:g.doorGlass.length===2&&g.doorParts.left.length>=5&&g.doorParts.right.length>=5,closed,opensOutside,staysOpenInside,slidesApart:Math.abs(openCenters[0]-openCenters[1])>Math.abs(closedCenters[0]-closedCenters[1])+2};});
 if(Object.values(doors).some(v=>!v))throw new Error(`Automatic sliding doors failed: ${JSON.stringify(doors)}`);
+const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOpen=1;g.applyDoorOpen();const clearSegment=(a,b)=>{const steps=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.08);for(let i=0;i<=steps;i++){const t=i/steps;if(g.isBlocked(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t))return false}return true},clearRoute=points=>points.slice(1).every((point,i)=>clearSegment(points[i],point));return{rightRoute:clearRoute([[0,-2.2],[0,-1.85],[3.8,-1.85],[3.8,.8],[2,.8]]),leftRoute:clearRoute([[0,-2.2],[0,-1.85],[-3.8,-1.85],[-3.8,.8],[-2,.8]]),binAway:g.station.getObjectByName('TrashBin').position.z>2.5,mopAway:g.kit.position.z>2.5}});
+if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter are blocked: ${JSON.stringify(shopAccess)}`);
 const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
   const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   const hold=(done,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!done();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return done()};
@@ -173,4 +175,4 @@ await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: indoor mop, adjustable louder ambient music, automatic doors, blackout lockout, fuel flow, traffic and desktop/mobile UI are working.');await browser.close();
+console.log('E2E passed: both routes behind the counter are open; indoor mop, music controls, doors, blackout, fuel flow and traffic are working.');await browser.close();
