@@ -44,6 +44,44 @@ const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   out.independentCapacity=g.stock.coffee===5&&g.stock.snack===5&&document.querySelector('#stock-coffee').textContent==='5/5'&&document.querySelector('#stock-snack').textContent==='5/5';
   g.player.position.set(0,.26,-3);g.updatePlayer(0);return out;});
 if(Object.values(upperStock).some(v=>!v))throw new Error(`Second-floor stock loop failed: ${JSON.stringify(upperStock)}`);
+const stairAccess=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  // Проход по лестнице должен быть шириной со ступени, а не узкой полоской посередине.
+  const widthAt=z=>{let min=null,max=null;for(let x=4.9;x<=6.9;x+=.02){const y=g.floorHeight(x,z,3.2);if(g.isBlocked(x,z,null,y))continue;if(min===null)min=x;max=x}return min===null?0:max-min};
+  out.mouthWide=widthAt(-2.1)>1.2;out.middleWide=widthAt(.4)>1.2;out.topWide=widthAt(2.6)>1.2;
+  // Перила стоят снаружи прохода, а не поперёк него.
+  const rails=[];g.scene.traverse(o=>{if(o.isMesh&&/Rail|Handrail/i.test(o.name))rails.push(o.getWorldPosition(new g.player.position.constructor()))});
+  out.railsFound=rails.length>=7;
+  out.doorwayClear=!rails.some(r=>r.x>4.2&&r.x<6.4&&r.z<3.95);
+  // Снизу и до самого склада — пешком, без прыжков.
+  const climb=startX=>{g.player.position.set(startX,.26,-3.4);g.yaw=Math.PI;g.pitch=0;g.resetJump();g.keys.KeyW=true;for(let i=0;i<300;i++){g.updateDoors(1/60);g.updatePlayer(1/60)}g.keys.KeyW=false;return g.player.position.y};
+  out.climbsNearWall=climb(5.45)>3.5;out.climbsNearRail=climb(6.35)>3.5;
+  g.player.position.set(5.9,3.68,3.3);g.yaw=Math.PI/2;g.resetJump();
+  for(let i=0;i<40;i++)g.updateDoors(1/60);
+  g.keys.KeyW=true;for(let i=0;i<160;i++){g.updateDoors(1/60);g.updatePlayer(1/60)}g.keys.KeyW=false;
+  out.walksIntoStockRoom=g.player.position.x<3.6&&g.player.position.y>3.5;
+  out.neverJumped=g.grounded&&g.jumpHeight===0;
+  // С площадки не свалиться: задний край огорожен.
+  g.player.position.set(5.9,3.68,3.3);g.yaw=0;g.keys.KeyS=true;for(let i=0;i<90;i++)g.updatePlayer(1/60);g.keys.KeyS=false;
+  out.railHoldsAtEdge=g.player.position.z<3.95&&g.player.position.y>3.5;
+  g.player.position.set(0,.26,-3.35);g.yaw=0;g.resetJump();g.updatePlayer(0);return out;});
+if(Object.values(stairAccess).some(v=>!v))throw new Error(`Stock room access failed: ${JSON.stringify(stairAccess)}`);
+const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const hold=(check,max=120)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
+  const stand=g.jobs.find(j=>j.tag==='supply-coffee');
+  out.standHidden=!!stand&&stand.hidden===true;
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:5,snack:5};g.updateHud();
+  g.player.position.set(stand.pos().x,3.68,stand.pos().z-.55);g.updateInteraction(0);
+  out.standReachable=g.nearest===stand;
+  out.fullShelfRefused=!hold(()=>g.carry==='coffeeBox',40)&&g.stockVisuals.coffee.every(o=>o.visible);
+  // Запас не полон — идём за коробкой сами, до того как смена попросит.
+  g.stock.coffee=2;g.updateHud();
+  out.takenWithoutJob=hold(()=>g.carry==='coffeeBox')&&!g.jobs.some(j=>j.tag==='restock-coffee-pick');
+  out.deliveryQueued=g.jobs.some(j=>j.tag==='restock-coffee-put');
+  out.shelfEmptied=g.stockVisuals.coffee.every(o=>!o.visible);
+  g.updateInteraction(0);out.standOffersReturn=g.nearest===stand&&g.jobLabel(stand).startsWith('Верните');
+  out.boxGoesBack=hold(()=>g.carry===null)&&g.stockVisuals.coffee.every(o=>o.visible)&&!g.jobs.some(j=>j.tag==='restock-coffee-put');
+  g.stock={coffee:5,snack:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
+if(Object.values(freeRestock).some(v=>!v))throw new Error(`Free restocking failed: ${JSON.stringify(freeRestock)}`);
 await mkdir('artifacts',{recursive:true});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(8,.26,-8);g.yaw=2.28;g.pitch=.19;g.updatePlayer(0)});await page.waitForTimeout(350);await page.screenshot({path:'artifacts/second-floor.png'});await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-3);g.yaw=0;g.pitch=-.04;g.updatePlayer(0)});
 const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
@@ -192,7 +230,7 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   goTo(repair.pos());
   out.repaired=hold(()=>!g.jobs.includes(repair))&&g.pumps.every(p=>!p.broken);
   out.toolsAreBack=g.carry===null;
-  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===2&&!g.jobs.some(j=>j.hidden&&!j.tag.startsWith('stand'));
+  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===4&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
   return out;});
 if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
 const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();

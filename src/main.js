@@ -98,7 +98,7 @@ class NightStationGame{
       if(o.isMesh&&(o.name.startsWith('SnackStockCarton')||o.name.startsWith('SnackStockBand')))this.stockVisuals.snack.push(o);
     });this.secondFloor=secondFloor;this.scene.add(secondFloor);
     const upperLight=new THREE.PointLight(0xffd9a3,18,11,1.7);upperLight.position.set(0,5.45,1.1);upperLight.userData.onIntensity=18;upperLight.castShadow=false;this.scene.add(upperLight);this.stationLights.push(upperLight);
-    this.landmarkLabels=[this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-1.75,2.62,-.72),1.65),this.createLandmarkLabel('ЕДА','#ffae35',new THREE.Vector3(1.75,2.62,-.72),1.65),this.createLandmarkLabel('ЩИТОК','#ffae35',new THREE.Vector3(-4.02,2.55,2.2),1.8),this.createLandmarkLabel('НАХОДКИ','#37d5ef',new THREE.Vector3(3.68,2.08,2),2.25),this.createLandmarkLabel('← ЩИТОК   НАХОДКИ →','#f4f2df',new THREE.Vector3(0,2.9,3.72),3.7,29),this.createLandmarkLabel('СКЛАД ↑','#ffae35',new THREE.Vector3(5.82,1.65,-2.62),1.8),this.createLandmarkLabel('ЗАПАС КОФЕ','#37d5ef',new THREE.Vector3(-1.75,5.25,3.55),2),this.createLandmarkLabel('ЗАПАС ЕДЫ','#ffae35',new THREE.Vector3(1.75,5.25,3.55),2)];
+    this.landmarkLabels=[this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-1.75,2.62,-.72),1.65),this.createLandmarkLabel('ЕДА','#ffae35',new THREE.Vector3(1.75,2.62,-.72),1.65),this.createLandmarkLabel('ЩИТОК','#ffae35',new THREE.Vector3(-4.02,2.55,2.2),1.8),this.createLandmarkLabel('НАХОДКИ','#37d5ef',new THREE.Vector3(3.68,2.08,2),2.25),this.createLandmarkLabel('← ЩИТОК   НАХОДКИ →','#f4f2df',new THREE.Vector3(0,2.9,3.72),3.7,29),this.createLandmarkLabel('СКЛАД ↑','#ffae35',new THREE.Vector3(5.82,2.62,-2.98),1.8),this.createLandmarkLabel('ЗАПАС КОФЕ','#37d5ef',new THREE.Vector3(-1.75,5.25,3.55),2),this.createLandmarkLabel('ЗАПАС ЕДЫ','#ffae35',new THREE.Vector3(1.75,5.25,3.55),2)];
     for(const x of [-2.55,2.55]){const model=this.assets.pump.clone(true);model.position.set(x,.24,SLOT_Z);this.scene.add(model);const pump={x,z:SLOT_Z,model,car:null,broken:false,slotX:x+Math.sign(x)*SLOT_OFFSET,hoseSpot:new THREE.Vector3(x+.72,.25,SLOT_Z-.52),hoseParts:[]};model.traverse(o=>{if(o.name==='Hose'||o.name==='Nozzle')pump.hoseParts.push(o);if(o.isMesh&&o.name==='Display')this.powerVisuals.push(o)});this.pumps.push(pump)}
     this.player=this.assets.worker.clone(true);this.player.position.set(0,.26,-3.35);this.player.scale.setScalar(.92);this.scene.add(this.player);
     const kit=this.assets.cleaning_kit.clone(true);kit.position.copy(MOP_SPOT);kit.scale.setScalar(.8);this.scene.add(kit);
@@ -220,7 +220,7 @@ class NightStationGame{
     return GROUND_Y
   }
   isUpperBlocked(x,z){
-    const r=PLAYER_RADIUS,onStairs=x>STAIR.minX+r&&x<STAIR.maxX-r&&z>STAIR.minZ&&z<STAIR.maxZ,onLanding=x>UPPER_LANDING.minX+r*.35&&x<UPPER_LANDING.maxX-r&&z>UPPER_LANDING.minZ+r*.2&&z<UPPER_LANDING.maxZ-r,onRoom=x>UPPER_ROOM.minX+r&&x<UPPER_ROOM.maxX-r*.1&&z>UPPER_ROOM.minZ+r&&z<UPPER_ROOM.maxZ-r;
+    const r=PLAYER_RADIUS,onStairs=x>STAIR.minX+.14&&x<STAIR.maxX-.14&&z>STAIR.minZ&&z<STAIR.maxZ,onLanding=x>UPPER_LANDING.minX+.04&&x<UPPER_LANDING.maxX-.52&&z>UPPER_LANDING.minZ+.06&&z<UPPER_LANDING.maxZ-.22,onRoom=x>UPPER_ROOM.minX+r&&x<UPPER_ROOM.maxX-r*.1&&z>UPPER_ROOM.minZ+r&&z<UPPER_ROOM.maxZ-r;
     if(!onStairs&&!onLanding&&!onRoom)return true;
     const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
     if(onRoom&&([[-3.03,-.47,3.52,4.5],[.47,3.03,3.52,4.5]].some(a=>hitRect(...a))))return true;
@@ -383,10 +383,26 @@ class NightStationGame{
     this.addJob({car,title:`Приготовьте ${name}`,sub:`Заказ с колонки ${this.pumps.indexOf(car.pump)+1} · осталось ${this.stock[kind]}/${MAX_FOOD_STOCK}`,pos:()=>source,duration:isCoffee?1.5:1.05,patience:prepPatience,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands())return false;if(this.stock[kind]<=0){this.toast(`${isCoffee?'Кофе':'Сэндвичи'} закончились — запас на втором этаже`);this.createRestockJob(kind);return false}this.stock[kind]--;this.carry=kind;this.updateCarry();this.updateHud();audio.tone(620,.12,'square',.14);this.addJob({car,title:`Отнесите ${name}`,sub:`К машине у колонки ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:.7,patience:deliveryPatience,onFail:()=>{this.carry=null;this.updateCarry();this.loseCustomer(car)},onComplete:()=>{if(this.carry!==kind)return false;this.carry=null;this.updateCarry();const gain=(isCoffee?55+this.state.upgrades.coffee*15:48);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.08);this.served++;audio.success();this.toast(`Заказ выдан <b>+₽${gain}</b>`);this.leaveCar(car);if(this.stock[kind]<=2)this.createRestockJob(kind)}})}})
   }
   setStockVisual(kind,visible){this.stockVisuals[kind]?.forEach(o=>o.visible=visible)}
+  supplyCarry(kind){return kind==='coffee'?'coffeeBox':'snackBox'}
+  /* Смена сама просит пополнить запас, когда он кончается. Задание видно в списке дел. */
   createRestockJob(kind='snack'){
-    const isCoffee=kind==='coffee',tag=`restock-${kind}`,carry=isCoffee?'coffeeBox':'snackBox',label=isCoffee?'кофе':'сэндвичей',target=isCoffee?COFFEE_SPOT:FOOD_SPOT;
-    if(this.stock[kind]>=MAX_FOOD_STOCK||this.jobs.some(j=>j.tag===`${tag}-pick`||j.tag===`${tag}-put`))return;
-    this.addJob({tag:`${tag}-pick`,priority:2,title:`Возьмите запас ${label}`,sub:'Склад на 2 этаже · лестница снаружи справа',pos:()=>SUPPLY_SPOTS[kind],duration:1.1,onComplete:()=>{if(!this.freeHands())return false;this.carry=carry;this.setStockVisual(kind,false);this.updateCarry();this.addJob({tag:`${tag}-put`,priority:2,title:`Пополните ${isCoffee?'кофемашину':'витрину еды'}`,sub:'Вернитесь на 1 этаж к аппарату у прилавка',pos:()=>target,duration:1.6,onComplete:()=>{if(this.carry!==carry)return false;this.carry=null;this.stock[kind]=MAX_FOOD_STOCK;this.setStockVisual(kind,true);this.updateCarry();this.updateHud();this.state.money+=20;this.toast(`${isCoffee?'Кофе':'Сэндвичи'} пополнены: <b>${MAX_FOOD_STOCK}/${MAX_FOOD_STOCK}</b>`);audio.success()}})}})
+    const tag=`restock-${kind}`,label=kind==='coffee'?'кофе':'сэндвичей';
+    if(this.stock[kind]>=MAX_FOOD_STOCK||this.carry===this.supplyCarry(kind)||this.jobs.some(j=>j.tag===`${tag}-pick`||j.tag===`${tag}-put`))return;
+    this.addJob({tag:`${tag}-pick`,priority:2,title:`Возьмите запас ${label}`,sub:'Склад на 2 этаже · лестница снаружи справа',pos:()=>SUPPLY_SPOTS[kind],duration:1.1,onComplete:()=>this.takeSupplyBox(kind)})
+  }
+  /* Коробка со стеллажа: и по заданию, и просто так, когда игрок сам решил сходить наверх. */
+  takeSupplyBox(kind){
+    if(this.stock[kind]>=MAX_FOOD_STOCK){this.toast(`${kind==='coffee'?'Кофемашина':'Витрина'} и так полная`);return false}
+    if(!this.freeHands())return false;
+    this.carry=this.supplyCarry(kind);this.setStockVisual(kind,false);this.updateCarry();audio.tone(300,.1,'square',.12);
+    this.jobs.filter(j=>j.tag===`restock-${kind}-pick`).forEach(j=>this.removeJob(j));
+    this.addSupplyDelivery(kind);return true
+  }
+  returnSupplyBox(kind){this.carry=null;this.setStockVisual(kind,true);this.updateCarry();this.jobs.filter(j=>j.tag===`restock-${kind}-put`).forEach(j=>this.removeJob(j));audio.tone(220,.1,'square',.1)}
+  addSupplyDelivery(kind){
+    const isCoffee=kind==='coffee',tag=`restock-${kind}-put`,carry=this.supplyCarry(kind);
+    if(this.jobs.some(j=>j.tag===tag))return;
+    this.addJob({tag,priority:2,title:`Пополните ${isCoffee?'кофемашину':'витрину еды'}`,sub:'Вернитесь на 1 этаж к аппарату у прилавка',pos:()=>isCoffee?COFFEE_SPOT:FOOD_SPOT,duration:1.6,onComplete:()=>{if(this.carry!==carry)return false;this.carry=null;this.stock[kind]=MAX_FOOD_STOCK;this.setStockVisual(kind,true);this.updateCarry();this.updateHud();this.state.money+=20;this.toast(`${isCoffee?'Кофе':'Сэндвичи'} пополнены: <b>${MAX_FOOD_STOCK}/${MAX_FOOD_STOCK}</b>`);audio.success()}})
   }
   leaveCar(car){if(!car||car.status===VEHICLE_STATE.LEAVING)return;this.returnFuelHose(car);this.jobs.filter(j=>j.car===car).forEach(j=>this.removeJob(j));car.status=VEHICLE_STATE.LEAVING;car.phase='reversing';car.mergeCommitted=false;setPath(car,reversePath(car.slotX,SLOT_Z,car.side),2.9);audio.tone(78,.45,'sine',.07)}
   loseCustomer(car){if(!car||car.status===VEHICLE_STATE.LEAVING)return;this.state.rep=Math.max(1,this.state.rep-.22);this.toast('<b>Клиент уехал недовольным</b>');audio.fail();this.leaveCar(car)}
@@ -454,6 +470,12 @@ class NightStationGame{
     this.addJob({tag:'stand-tools',hidden:true,sub:'Ящик у левой стены магазина',duration:.55,pos:()=>TOOL_SPOT,
       title:()=>this.carry==='tools'?'Уберите инструменты':'Возьмите инструменты',
       onComplete:()=>{if(this.carry==='tools')this.stowTool();else if(this.freeHands()){this.carry='tools';this.updateCarry();audio.tone(280,.09,'square',.12)}return false}});
+    for(const kind of ['coffee','snack']){
+      const label=kind==='coffee'?'кофе':'сэндвичей';
+      this.addJob({tag:`supply-${kind}`,hidden:true,sub:'Стеллаж запаса на складе',duration:.7,pos:()=>SUPPLY_SPOTS[kind],
+        title:()=>this.carry===this.supplyCarry(kind)?`Верните запас ${label} на полку`:`Возьмите запас ${label}`,
+        onComplete:()=>{if(this.carry===this.supplyCarry(kind))this.returnSupplyBox(kind);else this.takeSupplyBox(kind);return false}});
+    }
   }
   freeHands(){if(!this.carry)return true;if(this.carry==='mop'||this.carry==='tools'){const note=STOW_NOTE[this.carry];this.stowTool();this.toast(note);return true}this.toast('Сначала отдайте то, что уже в руках');return false}
   stowTool(){if(this.carry!=='mop'&&this.carry!=='tools')return;if(this.carry==='mop')this.kitMop.forEach(m=>m.visible=true);this.carry=null;this.updateCarry()}

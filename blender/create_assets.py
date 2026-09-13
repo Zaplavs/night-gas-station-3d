@@ -264,9 +264,9 @@ def make_second_floor():
         z = start_z + i * step_depth
         cube(f"StairStep{i+1:02d}", (stair_x, top/2, z), (.82, top/2, step_depth*.52), M["concrete"], .025)
     cube("UpperLanding", (5.82, 3.56, 3.35), (1.28, .12, .78), M["concrete"], .025)
-    # Rails and safety posts make the route obvious in the dark.
-    for x in (4.92, 6.72):
-        cube("LandingRail", (x, 4.12, 3.48), (.045, .56, .84), M["yellow"], .018)
+    # Rails guard only the open edges: the way from the stair to the door stays clear.
+    cube("LandingRailBack", (5.82, 4.12, 4.06), (1.28, .56, .045), M["yellow"], .018)
+    cube("LandingRailSide", (6.72, 4.12, 3.35), (.045, .56, .78), M["yellow"], .018)
     for i in range(5):
         z = start_z + i * 1.28
         y = .75 + i * .77
