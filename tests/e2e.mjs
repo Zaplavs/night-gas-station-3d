@@ -48,12 +48,12 @@ const onRoad=p=>Math.abs(p.x)>40&&p.z<-12.4&&p.z>-21.6;
 const road=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.carQueue=[];g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0],start=c.path.curve.getPointAt(0);
   for(let i=0;i<1400&&c.status!=='waiting';i++)g.updateCars(.05);
-  const end=c.group.position.clone();
+  const end=c.group.position.clone(),parkedYaw=c.group.rotation.y;
   c.status='waiting';g.leaveCar(c);let reversedFirst=c.status==='leaving'&&c.phase==='reversing',left=false;
   for(let i=0;i<500&&!left;i++){g.updateCars(.05);left=c.phase==='exiting'}
   const exit=left?c.path.curve.getPointAt(1):null;
-  return {start:{x:start.x,z:start.z},parked:{x:end.x,z:end.z},slot:{x:c.target.x,z:c.target.z},reversedFirst,left,exit:exit&&{x:exit.x,z:exit.z}};});
-const roadChecks={arrivesFromRoad:onRoad(road.start),parksAtPump:Math.hypot(road.parked.x-road.slot.x,road.parked.z-road.slot.z)<.1,
+  return {start:{x:start.x,z:start.z},parked:{x:end.x,z:end.z},slot:{x:c.target.x,z:c.target.z},yaw:parkedYaw,reversedFirst,left,exit:exit&&{x:exit.x,z:exit.z}};});
+const roadChecks={arrivesFromRoad:onRoad(road.start),parksAtPump:Math.hypot(road.parked.x-road.slot.x,road.parked.z-road.slot.z)<.1,parksStraight:Math.abs(Math.sin(road.yaw))<.015,
   reversesOut:road.reversedFirst,leavesOnRoad:road.left&&onRoad(road.exit)};
 if(Object.values(roadChecks).some(v=>!v))throw new Error(`Car road routing failed: ${JSON.stringify(roadChecks)} ${JSON.stringify(road)}`);
 const safety=await page.evaluate(()=>{const g=window.__nightStation;

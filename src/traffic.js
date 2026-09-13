@@ -54,8 +54,9 @@ export function queueToPumpPath(position,slotX,slotZ){
     [stagingX,slotZ-6.25],
     [outerX,slotZ-5.9],
     [outerX,slotZ-3.2],
-    [slotX+side*.9,slotZ-1.75],
-    [slotX+side*.25,slotZ-.75],
+    [slotX+side*.7,slotZ-2.15],
+    [slotX,slotZ-1.3],
+    [slotX,slotZ-.55],
     [slotX,slotZ]
   ]);
 }
