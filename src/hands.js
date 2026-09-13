@@ -58,14 +58,14 @@ function snack(){
   return g;
 }
 
-function crate(){
+function crate(accent=PAL.tape,key='stock'){
   const g=new THREE.Group();
   const card=mat('card',PAL.card,.95);
   put(g,box('crate',.34,.24,.27),card);
   put(g,box('tape',.345,.035,.02),mat('tape',PAL.tape,.9),0,.122,0);
   for(const s of[-1,1]){
     put(g,box('flap',.33,.012,.11),card,0,.14,s*.14,s*.75);
-    put(g,box('label',.1,.07,.004),mat('tape',PAL.tape,.9),s*.09,0,-.138);
+    put(g,box('label',.1,.07,.004),mat(`${key}-label`,accent,.72),s*.09,0,-.138);
   }
   const l=hand(-1),r=hand(1);
   l.position.set(-.185,-.055,.02);l.rotation.set(.1,0,-1.15);
@@ -159,7 +159,7 @@ export class HandView{
     this.sway=new THREE.Vector2();this.swayTo=new THREE.Vector2();this.aspect=0;
   }
   build(assets){
-    const made={coffee:coffee(),snack:snack(),box:crate(),mop:mop(),tools:tools(),hose:fuelHose(),bag:lostBag(assets&&assets.bag)};
+    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),bag:lostBag(assets&&assets.bag)};
     for(const [name,group] of Object.entries(made)){group.visible=false;this.items[name]=group;this.rig.add(group)}
   }
   set(name){

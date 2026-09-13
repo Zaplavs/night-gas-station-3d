@@ -219,6 +219,65 @@ def make_station():
     export("station")
 
 
+def make_second_floor():
+    """A real walkable stock room and exterior stair above the existing shop."""
+    reset()
+    # The slab sits directly over the old roof. The room stays compact so the
+    # exterior stair and its landing remain readable from the forecourt.
+    cube("UpperFloor", (0, 3.56, 1.2), (4.58, .12, 3.68), M["concrete"], .025)
+    cube("UpperBackWall", (0, 4.78, 4.76), (4.58, 1.1, .12), M["cream"])
+    cube("UpperLeftWall", (-4.48, 4.78, 1.2), (.12, 1.1, 3.45), M["cream"])
+    # The right-hand wall has a proper doorway onto the outside landing.
+    cube("UpperRightWallFront", (4.48, 4.78, -.05), (.12, 1.1, 2.2), M["cream"])
+    cube("UpperRightWallBack", (4.48, 4.78, 4.35), (.12, 1.1, .38), M["cream"])
+    cube("UpperDoorHeader", (4.48, 5.75, 3.15), (.14, .13, .82), M["charcoal"], .025)
+    for z in (2.36, 3.94):
+        cube("UpperDoorFrame", (4.58, 4.7, z), (.13, 1.05, .07), M["charcoal"], .02)
+    cube("UpperDoor", (4.61, 4.68, 3.15), (.055, .96, .72), M["red"], .045)
+    cube("UpperDoorWindow", (4.55, 4.93, 3.15), (.018, .34, .48), M["glass"], .018)
+    cube("UpperDoorHandle", (4.50, 4.62, 2.63), (.035, .22, .035), M["yellow"], .018)
+
+    # Front windows keep the new room visible instead of turning it into a box.
+    cube("UpperFrontBase", (0, 4.02, -2.36), (4.48, .43, .12), M["red"])
+    cube("UpperFrontGlass", (0, 4.95, -2.38), (3.95, .47, .045), M["glass"], .025)
+    for x in (-4.42, -2.0, 0, 2.0, 4.42):
+        cube("UpperWindowFrame", (x, 4.95, -2.43), (.06, .53, .08), M["charcoal"], .02)
+    cube("UpperFascia", (0, 5.7, -2.4), (4.58, .25, .14), M["red"])
+    cube("UpperRoof", (0, 6.0, 1.2), (4.72, .13, 3.82), M["darkred"], .035)
+
+    # Two unmistakable low-poly supply racks. Coffee is cyan-banded, food is
+    # yellow-banded; individual cartons make the remaining stock legible.
+    for x, prefix, band in ((-1.75, "CoffeeStock", M["cyan"]), (1.75, "SnackStock", M["yellow"])):
+        cube(prefix + "Rack", (x, 4.35, 4.1), (1.22, .72, .42), M["charcoal"], .045)
+        for row in range(2):
+            cube(prefix + "Shelf", (x, 3.92 + row*.72, 3.64), (1.28, .045, .48), M["chrome"], .015)
+            for col in range(5):
+                carton_x = x - .86 + col*.43
+                cube(prefix + "Carton", (carton_x, 4.15 + row*.72, 3.68), (.16, .19, .22), M["brown"], .035)
+                cube(prefix + "Band", (carton_x, 4.15 + row*.72, 3.445), (.12, .055, .018), band, .012)
+
+    # Exterior stair along the right wall. Solid stepped blocks keep the mesh
+    # very cheap and match the height function used by the browser controller.
+    stair_x, start_z, step_depth, steps = 5.82, -2.18, .39, 14
+    for i in range(steps):
+        top = .26 + (i + 1) * (3.30 / steps)
+        z = start_z + i * step_depth
+        cube(f"StairStep{i+1:02d}", (stair_x, top/2, z), (.82, top/2, step_depth*.52), M["concrete"], .025)
+    cube("UpperLanding", (5.82, 3.56, 3.35), (1.28, .12, .78), M["concrete"], .025)
+    # Rails and safety posts make the route obvious in the dark.
+    for x in (4.92, 6.72):
+        cube("LandingRail", (x, 4.12, 3.48), (.045, .56, .84), M["yellow"], .018)
+    for i in range(5):
+        z = start_z + i * 1.28
+        y = .75 + i * .77
+        cube("StairRailPost", (6.72, y, z), (.045, .62, .045), M["yellow"], .018)
+    # A diagonal handrail authored as a beveled cylinder.
+    rail_length = math.hypot(5.12, 3.08)
+    rail = cyl("StairHandrail", (6.72, 2.18, .38), .045, rail_length, M["yellow"], 8,
+               rotation=(math.atan2(5.12, 3.08), 0, 0))
+    export("second_floor")
+
+
 def make_pump():
     reset()
     cube("PumpBody", (0,1.0,0), (.52,1.0,.38), M["red"], .1)
@@ -322,6 +381,7 @@ def make_props():
 
 makers = {
     "station": make_station,
+    "second_floor": make_second_floor,
     "pump": make_pump,
     "car": make_car,
     "mystery_van": make_van,
