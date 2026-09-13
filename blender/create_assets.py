@@ -163,17 +163,31 @@ def make_station():
     cube("CoffeeMachine", (-1.75, 1.78, -.35), (.55, .55, .38), M["charcoal"])
     cube("CoffeePanel", (-1.75, 1.86, -.75), (.36, .27, .025), M["cyan"])
     cyl("CoffeePot", (-1.75, 1.58, -.82), .19, .32, M["coffee"], 10)
-    # Product shelves with real low-poly products.
-    for x in (-3.55, 3.55):
-        cube("ShelfFrame", (x, 1.25, 2.5), (.55, 1.2, 1.45), M["charcoal"])
+    # A dedicated food warmer makes the second counter interaction readable.
+    cube("FoodStation", (1.75, 1.72, -.35), (.62, .48, .4), M["charcoal"], .08)
+    cube("FoodGlass", (1.75, 1.82, -.77), (.5, .3, .025), M["glass"], .02)
+    cube("FoodPanel", (1.75, 1.42, -.79), (.28, .08, .025), M["yellow"], .015)
+    for x in (1.47, 1.75, 2.03):
+        cube("Sandwich", (x, 1.78, -.8), (.11, .08, .04), M["yellow"], .025)
+    # Wide, shallow shelves sit against the back wall instead of hiding the side stations.
+    for x in (-2.0, 2.0):
+        cube("ShelfFrame", (x, 1.25, 4.28), (1.42, 1.2, .38), M["charcoal"])
         for row in range(3):
-            cube("Shelf", (x, .48 + row*.75, 2.5), (.62, .045, 1.5), M["chrome"])
-            for col in range(3):
+            cube("Shelf", (x, .48 + row*.75, 3.86), (1.5, .045, .44), M["chrome"])
+            for col in range(5):
                 color = M["yellow"] if (row+col)%2 else M["red"]
-                cube("Product", (x, .68 + row*.75, 1.65+col*.78), (.3,.18,.22), color, .025)
-    cube("FuseBox", (-4.48, 1.45, 3.7), (.16, .58, .45), M["chrome"])
-    cube("FuseLamp", (-4.29, 1.63, 3.7), (.025,.12,.12), M["yellow"])
-    cube("LostAndFound", (4.1, .48, 4.1), (.42,.42,.5), M["brown"])
+                cube("Product", (x-1.02+col*.51, .68 + row*.75, 3.78), (.18,.18,.2), color, .025)
+    cube("StockCrate", (-2.75, .35, 3.18), (.48, .35, .42), M["brown"], .08)
+    cube("StockCrateMark", (-2.75, .37, 2.74), (.2, .13, .025), M["yellow"], .025)
+    # High-contrast utility points remain visible from the entrance and side aisles.
+    cube("FuseFrame", (-4.47, 1.45, 2.2), (.18, .72, .62), M["yellow"], .07)
+    cube("FuseBox", (-4.27, 1.45, 2.2), (.06, .58, .49), M["chrome"], .04)
+    cube("FuseLamp", (-4.19, 1.68, 2.2), (.025,.14,.14), M["red"], .025)
+    cube("FuseHandle", (-4.18, 1.32, 2.2), (.025,.16,.055), M["charcoal"], .02)
+    cube("LostAndFound", (3.75, .5, 2.0), (.68,.5,.48), M["brown"], .1)
+    cube("LostAndFoundLid", (3.75, 1.04, 2.0), (.72,.07,.52), M["yellow"], .04)
+    cube("LostAndFoundSign", (3.75, 1.48, 2.43), (.62,.32,.04), M["cyan"], .06)
+    cube("LostAndFoundIcon", (3.75, 1.48, 2.37), (.18,.14,.025), M["charcoal"], .035)
     # Canopy and two islands.
     for x in (-2.55, 2.55):
         cube("CanopyPost", (x, 2.5, -7.4), (.16, 2.5, .16), M["white"])
@@ -291,11 +305,20 @@ def make_props():
     export("cleaning_kit")
 
 
-make_station()
-make_pump()
-make_car()
-make_van()
-make_worker()
-make_props()
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "blender", "night_station_assets.blend"))
-print("ALL ASSETS READY")
+makers = {
+    "station": make_station,
+    "pump": make_pump,
+    "car": make_car,
+    "mystery_van": make_van,
+    "worker": make_worker,
+    "props": make_props,
+}
+requested = os.environ.get("NIGHT_ASSET")
+if requested:
+    makers[requested]()
+    print("ASSET READY", requested)
+else:
+    for maker in makers.values():
+        maker()
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "blender", "night_station_assets.blend"))
+    print("ALL ASSETS READY")
