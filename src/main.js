@@ -14,12 +14,12 @@ const ui={
   tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
 };
 const audio=new AudioSystem();
-const SAVE_DEFAULT={money:0,shift:1,rep:3,upgrades:{speed:0,service:0,coffee:0},tutorial:false,sound:true,best:0};
+const SAVE_DEFAULT={money:0,shift:1,rep:3,upgrades:{speed:0,service:0,coffee:0},tutorial:false,sound:true,musicVolume:80,best:0};
 const isTouch=matchMedia('(pointer:coarse)').matches;
 const SLOT_Z=-7.4,SLOT_OFFSET=2.3,VAN_SLOT={x:7.6,z:-7.4};
 const VEHICLE_STATE=Object.freeze({ENTERING:'entering',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
 const PLAYER_RADIUS=.36,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12;
-const MOP_SPOT=new THREE.Vector3(-3.7,.25,-3.25),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
+const MOP_SPOT=new THREE.Vector3(-3.65,.25,-2.08),TOOL_SPOT=new THREE.Vector3(-4.28,.3,-.45);
 const COFFEE_SPOT=new THREE.Vector3(-1.75,.2,-.7),FOOD_SPOT=new THREE.Vector3(1.75,.2,-.7),FUSE_SPOT=new THREE.Vector3(-4.2,.2,2.2),LOST_SPOT=new THREE.Vector3(3.75,.2,2),STOCK_PICK_SPOT=new THREE.Vector3(-2.75,.2,3.18),STOCK_SHELF_SPOT=new THREE.Vector3(2,.2,3.8);
 const STOW_NOTE={mop:'Швабра вернулась на место',tools:'Инструменты вернулись в ящик'};
 const NEED_HINT={mop:'Сначала возьмите швабру у входа',tools:'Сначала возьмите инструменты в магазине',hose:'Сначала снимите пистолет с нужной колонки'};
@@ -103,12 +103,13 @@ class NightStationGame{
   setupUI(){
     $('#continue-btn').onclick=()=>this.prepareStart(false);$('#new-btn').onclick=()=>this.prepareStart(true);$('#tutorial-start').onclick=()=>{ui.tutorial.classList.add('hidden');this.state.tutorial=true;this.startShift();this.lockPointer()};
     $('#pause-btn').onclick=()=>this.pause();$('#resume-btn').onclick=()=>this.resume();$('#menu-btn').onclick=()=>{ui.pause.classList.add('hidden');this.showMenu()};$('#sound-btn').onclick=()=>this.toggleSound();
+    const musicVolume=$('#music-volume'),musicValue=$('#music-volume-value');musicVolume.oninput=()=>{this.state.musicVolume=Number(musicVolume.value);musicValue.textContent=`${this.state.musicVolume}%`;audio.setMusicVolume(this.state.musicVolume/100)};musicVolume.onchange=()=>saveProgress(this.state);
     $('#guide-btn').onclick=()=>this.openGuide();$('#guide-close').onclick=()=>this.closeGuide();$('#guide-prev').onclick=()=>{this.guideIndex=Math.max(0,this.guideIndex-1);this.renderGuide()};$('#guide-next').onclick=()=>{if(this.guideIndex>=3)this.closeGuide();else{this.guideIndex++;this.renderGuide()}};
     $('#next-shift').onclick=async()=>{ui.results.classList.add('hidden');await showInterstitial();this.startShift()};
     $('#reward-btn').onclick=async e=>{e.currentTarget.disabled=true;const success=await showRewarded();if(success){const bonus=Math.max(50,Math.round((this.state.money-this.shiftStartMoney)*.35));this.state.money+=bonus;this.toast(`Бонус за смену: <b>+₽${bonus}</b>`);this.updateHud();saveProgress(this.state)}e.currentTarget.classList.add('hidden')};
     $$('.upgrades button').forEach(b=>b.onclick=()=>this.buyUpgrade(b.dataset.upgrade));
   }
-  setState(data){if(!data)return;this.state={...SAVE_DEFAULT,...data,upgrades:{...SAVE_DEFAULT.upgrades,...(data.upgrades||{})}};audio.setMuted(!this.state.sound)}
+  setState(data){if(!data)return;this.state={...SAVE_DEFAULT,...data,upgrades:{...SAVE_DEFAULT.upgrades,...(data.upgrades||{})}};this.state.musicVolume=THREE.MathUtils.clamp(Number(this.state.musicVolume)||0,0,100);audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}}
   showMenu(){this.mode='menu';document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal());}
   prepareStart(fresh){audio.ensure();if(fresh)this.setState({...SAVE_DEFAULT,upgrades:{...SAVE_DEFAULT.upgrades},tutorial:false});ui.menu.classList.add('hidden');if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
@@ -159,7 +160,7 @@ class NightStationGame{
     const r=PLAYER_RADIUS;if(x<-9.2+r||x>9.2-r||z<-13.2+r||z>4.55-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
     const fixed=[[-4.95,4.95,4.7,5.05],[-4.92,-4.44,-2.7,5.05],[4.44,4.92,-2.7,5.05],[-4.72,-1.27,-2.72,-2.5],[1.27,4.72,-2.72,-2.5],[-3.12,3.12,-1.23,.13],[-3.5,3.5,3.72,4.68],[-2.55-.73,-2.55+.73,-8.15,-6.65],[2.55-.73,2.55+.73,-8.15,-6.65]];if(fixed.some(a=>hitRect(...a)))return true;
     if(this.doorGlass.some(door=>hitRect(door.position.x-.6,door.position.x+.6,-2.74,-2.58)))return true;
-    const circles=[[-6.6,-5.2,.3],[3.75,-1.95,.43],[-3.7,-3.25,.28],[3.75,2,.58],[-2.75,3.18,.46]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
+    const circles=[[-6.6,-5.2,.3],[3.75,-1.95,.43],[-3.4,-2,.5],[3.75,2,.58],[-2.75,3.18,.46]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
     for(const c of this.cars){if(c!==ignoreVehicle&&this.pointInVehicle(x,z,c,PLAYER_RADIUS))return true}if(this.specialVan&&this.specialVan!==ignoreVehicle&&this.pointInVehicle(x,z,this.specialVan,PLAYER_RADIUS))return true;return false
   }
   pointInVehicle(x,z,vehicle,margin=0,position=vehicle.group.position,rotationY=vehicle.group.rotation.y){
