@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node tests/smoke.mjs && node tests/levels.mjs",
+    "test": "node tests/smoke.mjs && node tests/levels.mjs && node tests/achievements.mjs",
     "test:e2e": "node tests/e2e.mjs"
   },
   "dependencies": {

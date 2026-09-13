@@ -287,7 +287,7 @@ await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-b
 const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
   // Сейв семисменной кампании продолжается с восьмого уровня, а не считается пройденным.
   g.setState({saveVersion:2,money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99,campaignComplete:true});
-  out.legacyContinues=g.state.saveVersion===3&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321&&g.state.upgrades.speed===2;
+  out.legacyContinues=g.state.saveVersion===4&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321&&g.state.upgrades.speed===2;
   g.setState({saveVersion:3,money:500,shift:1,rep:3,tutorial:true,sound:true,musicVolume:80,best:0,levelsCleared:0,campaignComplete:false,campaignEarnings:0,campaignServed:0});
   g.startShift();
   out.levelFromData=g.shiftConfig.number===1&&g.shiftLength===170&&g.shiftConfig.orderIntensity===0&&g.shiftConfig.allowedEvents.length===0&&g.shiftConfig.queueSize===1;
@@ -429,6 +429,59 @@ const levelMenuEndless=await page.evaluate(()=>{const g=window.__nightStation,ou
   out.backToCampaign=g.state.playMode==='campaign';
   return out;});
 if(Object.values(levelMenuEndless).some(v=>!v))throw new Error(`Level menu endless entry failed: ${JSON.stringify(levelMenuEndless)}`);
+const achievementScreen=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  g.setState({saveVersion:4,shift:1,levelsCleared:0,money:0,tutorial:true,sound:true,musicVolume:80,best:0,campaignComplete:false,achievements:[],stats:{}});
+  g.showMenu();document.querySelector('#achievements-btn').click();
+  const screen=document.querySelector('#achievements'),tiles=[...document.querySelectorAll('.achievement')];
+  out.opens=!screen.classList.contains('hidden')&&document.querySelector('#menu').classList.contains('hidden');
+  out.listsAll=tiles.length>=20;
+  out.progressShown=document.querySelector('#achievements-progress').textContent.includes(`0 из ${tiles.length}`);
+  out.allLocked=tiles.every(tile=>!tile.classList.contains('done'));
+  out.showsTargets=tiles.some(tile=>tile.querySelector('.achievement-count').textContent.includes('/'));
+  out.showsBars=tiles.every(tile=>!!tile.querySelector('.achievement-bar i'));
+  document.querySelector('#achievements-close').click();
+  out.closesToMenu=screen.classList.contains('hidden')&&!document.querySelector('#menu').classList.contains('hidden');
+  return out;});
+if(Object.values(achievementScreen).some(v=>!v))throw new Error(`Achievement screen failed: ${JSON.stringify(achievementScreen)}`);
+const achievementUnlock=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
+  // Встать так, чтобы целью была именно нужная задача: пятно падает в случайное место.
+  const reach=job=>{const p=job.pos();for(let r=.5;r<=1.3;r+=.1)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  g.setState({...g.state,shift:4,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  // Уборка десятого пятна закрывает «Чистый пол».
+  g.state.stats.spills=9;g.carry=null;g.updateCarry();
+  g.spawnSpill();const spill=g.jobs.find(j=>j.tag==='spill');
+  out.tookMop=reach(g.jobs.find(j=>j.tag==='stand-mop'))&&hold(()=>g.carry==='mop');
+  out.cleaned=reach(spill)&&hold(()=>!g.jobs.includes(spill))&&g.state.stats.spills===10;
+  out.unlocked=g.state.achievements.includes('clean-floor');
+  const toast=document.querySelector('.toast.achievement-toast');
+  out.announced=!!toast&&toast.textContent.includes('Чистый пол');
+  out.notRepeated=g.checkAchievements().length===0;
+  // Сотый прыжок закрывает «Разминку».
+  g.state.stats.jumps=99;g.resetJump();g.keys.Space=true;g.updateJump(1/60);g.keys.Space=false;
+  for(let i=0;i<200&&!g.grounded;i++)g.updateJump(1/60);
+  out.jumpCounted=g.state.stats.jumps===100&&g.state.achievements.includes('warm-up');
+  // Итоги смены пополняют счётчики и отмечают ночь без потерь.
+  const shifts=g.state.stats.shifts;g.served=g.shiftConfig.goal.served;g.lost=0;g.state.money+=300;g.finishShift();
+  out.shiftCounted=g.state.stats.shifts===shifts+1&&g.state.stats.earned>=300&&g.state.stats.flawless>=1;
+  out.flawlessUnlocked=g.state.achievements.includes('flawless');
+  // Заслуженное в прошлых версиях выдаётся молча при загрузке сейва.
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  g.setState({saveVersion:3,shift:13,levelsCleared:12,best:900,money:500,tutorial:true,sound:true,musicVolume:80});
+  out.retroGranted=g.state.achievements.includes('chapter-1')&&g.state.achievements.includes('chapter-2')&&g.state.achievements.includes('good-night');
+  out.retroSilent=document.querySelectorAll('.toast.achievement-toast').length===0;
+  g.openAchievements('menu');
+  const done=[...document.querySelectorAll('.achievement.done')];
+  out.screenMarksDone=done.length===g.state.achievements.length&&done.some(tile=>tile.dataset.achievement==='chapter-2');
+  out.screenCounts=document.querySelector('#achievements-progress').textContent.startsWith(`${g.state.achievements.length} из`);
+  g.closeAchievements();
+  return out;});
+if(Object.values(achievementUnlock).some(v=>!v))throw new Error(`Achievement unlocking failed: ${JSON.stringify(achievementUnlock)}`);
+await page.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,stats:{refuels:60,coffee:30,snacks:12,spills:10,jumps:100,shifts:9,served:44,earned:5200,rushes:4},levelsCleared:12,best:900});g.openAchievements('menu')});
+await page.screenshot({path:'artifacts/achievements.png'});
+await page.evaluate(()=>window.__nightStation.closeAchievements());
 if(errors.length)throw new Error(`Runtime errors: ${errors.join(' | ')}`);
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -448,4 +501,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();

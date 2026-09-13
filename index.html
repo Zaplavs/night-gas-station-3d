@@ -66,6 +66,7 @@
       <div class="menu-actions">
         <button id="continue-btn" class="primary">ПРОДОЛЖИТЬ СМЕНУ <span>→</span></button>
         <button id="levels-btn" class="secondary">УРОВНИ</button>
+        <button id="achievements-btn" class="secondary">ДОСТИЖЕНИЯ</button>
         <button id="new-btn" class="secondary">НОВАЯ ИГРА</button>
       </div>
       <div class="controls-hint"><span><kbd>WASD</kbd> двигаться</span><span><kbd>E</kbd> действие</span><span><kbd>Shift</kbd> бег</span><span><kbd>Space</kbd> прыжок</span></div>
@@ -104,6 +105,16 @@
       </div>
       <div id="level-grid"></div>
       <button id="levels-endless" class="secondary hidden">БЕСКОНЕЧНЫЙ РЕЖИМ <span>∞</span></button>
+    </div>
+  </section>
+
+  <section id="achievements" class="screen modal-screen hidden">
+    <div class="dialog levels-card">
+      <div class="guide-top">
+        <p class="eyebrow">ДОСТИЖЕНИЯ · <span id="achievements-progress">…</span></p>
+        <button id="achievements-close" aria-label="Закрыть">×</button>
+      </div>
+      <div id="achievement-grid"></div>
     </div>
   </section>
 
