@@ -158,19 +158,19 @@ def make_station():
     cube("RedFascia", (0, 2.95, -2.55), (4.8, .38, .18), M["red"])
     number_24("ShopSign", (0, 3.0, -2.77), .82, mirror=True)
     # Glazed storefront with a two-leaf automatic sliding entrance.
-    cube("EntranceGlassLeft", (-3.0, 1.45, -2.61), (1.68, 1.4, .045), M["glass"], .025)
-    cube("EntranceGlassRight", (3.0, 1.45, -2.61), (1.68, 1.4, .045), M["glass"], .025)
-    cube("EntranceFrameTop", (0, 2.84, -2.63), (4.7, .07, .08), M["chrome"], .025)
+    cube("EntranceGlassLeft", (-3.0, 1.31, -2.61), (1.68, 1.2, .045), M["glass"], .025)
+    cube("EntranceGlassRight", (3.0, 1.31, -2.61), (1.68, 1.2, .045), M["glass"], .025)
+    cube("EntranceFrameTop", (0, 2.48, -2.63), (4.7, .07, .08), M["chrome"], .025)
     for x in (-4.67, -1.27, 1.27, 4.67):
-        cube("EntranceFrame", (x, 1.44, -2.63), (.055, 1.4, .08), M["chrome"], .02)
+        cube("EntranceFrame", (x, 1.3, -2.63), (.055, 1.23, .08), M["chrome"], .02)
     for side, x in (("Left", -.62), ("Right", .62)):
-        cube(f"Door{side}Glass", (x, 1.43, -2.68), (.6, 1.34, .035), M["glass"], .02)
-        cube(f"Door{side}Top", (x, 2.76, -2.7), (.6, .04, .055), M["chrome"], .015)
+        cube(f"Door{side}Glass", (x, 1.3, -2.68), (.6, 1.17, .035), M["glass"], .02)
+        cube(f"Door{side}Top", (x, 2.49, -2.7), (.6, .04, .055), M["chrome"], .015)
         cube(f"Door{side}Bottom", (x, .1, -2.7), (.6, .04, .055), M["chrome"], .015)
         edge = -.585 if side == "Left" else .585
-        cube(f"Door{side}Edge", (x+edge, 1.43, -2.7), (.035, 1.34, .055), M["chrome"], .015)
+        cube(f"Door{side}Edge", (x+edge, 1.3, -2.7), (.035, 1.2, .055), M["chrome"], .015)
         handle = .42 if side == "Left" else -.42
-        cube(f"Door{side}Handle", (x+handle, 1.38, -2.75), (.035, .3, .035), M["yellow"], .02)
+        cube(f"Door{side}Handle", (x+handle, 1.26, -2.75), (.035, .3, .035), M["yellow"], .02)
     # Counter and readable shop stations.
     cube("Counter", (0, .65, -.55), (2.9, .65, .55), M["brown"])
     cube("CounterTop", (0, 1.34, -.55), (3.05, .08, .67), M["charcoal"])
