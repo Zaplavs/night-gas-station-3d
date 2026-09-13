@@ -182,9 +182,11 @@ export class HandView{
     this.use+=((state.acting?1:0)-this.use)*Math.min(1,dt*7);
     this.swayTo.set(THREE.MathUtils.clamp(state.yawDelta*1.6,-.07,.07),THREE.MathUtils.clamp(-state.pitchDelta*1.4,-.055,.055));
     this.sway.lerp(this.swayTo,Math.min(1,dt*8));
-    this.bob+=dt*(state.moving?8.5:1.8);
-    const amp=state.moving?1:.28,ease=1-Math.pow(1-this.raise,3);
-    this.rig.position.set(this.sway.x+Math.cos(this.bob)*.013*amp,this.sway.y+Math.sin(this.bob*2)*.011*amp-(1-ease)*.5,0);
+    this.bob+=dt*(state.moving&&!state.vertical?8.5:1.8);
+    const amp=state.moving&&!state.vertical?1:.28,ease=1-Math.pow(1-this.raise,3);
+    // В прыжке предмет отстаёт от камеры, при приземлении проседает вместе с ней.
+    const airLag=THREE.MathUtils.clamp((state.vertical||0)*-.016,-.06,.06)-(state.landing||0)*.55;
+    this.rig.position.set(this.sway.x+Math.cos(this.bob)*.013*amp,this.sway.y+Math.sin(this.bob*2)*.011*amp-(1-ease)*.5+airLag,0);
     this.rig.rotation.set(-this.sway.y*.7,this.sway.x*.8,this.sway.x*1.1);
     item.userData.anim?.(item,this.time,this.use,state);
   }
