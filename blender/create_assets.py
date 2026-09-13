@@ -149,12 +149,13 @@ def export(name):
 
 def make_station():
     reset()
-    # Shop shell, deliberately open on the forecourt side for readable isometric play.
-    cube("ShopFloor", (0, .12, 1.2), (4.8, .12, 3.8), M["concrete"])
-    cube("BackWall", (0, 1.65, 4.9), (4.8, 1.65, .12), M["cream"])
-    cube("LeftWall", (-4.68, 1.65, 1.2), (.12, 1.65, 3.8), M["cream"])
-    cube("RightWall", (4.68, 1.65, 1.2), (.12, 1.65, 3.8), M["cream"])
-    cube("Roof", (0, 3.35, 1.2), (4.95, .12, 3.95), M["darkred"])
+    # Shop shell. The room is deep on purpose: customers now come inside, so the
+    # hall in front of the counter has to hold a queue of people.
+    cube("ShopFloor", (0, .12, 2.0), (4.8, .12, 4.6), M["concrete"])
+    cube("BackWall", (0, 1.65, 6.5), (4.8, 1.65, .12), M["cream"])
+    cube("LeftWall", (-4.68, 1.65, 2.0), (.12, 1.65, 4.6), M["cream"])
+    cube("RightWall", (4.68, 1.65, 2.0), (.12, 1.65, 4.6), M["cream"])
+    cube("Roof", (0, 3.35, 2.0), (4.95, .12, 4.75), M["darkred"])
     cube("RedFascia", (0, 2.95, -2.55), (4.8, .38, .18), M["red"])
     number_24("ShopSign", (0, 3.0, -2.77), .82, mirror=True)
     # Glazed storefront with a two-leaf automatic sliding entrance.
@@ -171,37 +172,67 @@ def make_station():
         cube(f"Door{side}Edge", (x+edge, 1.3, -2.7), (.035, 1.2, .055), M["chrome"], .015)
         handle = .42 if side == "Left" else -.42
         cube(f"Door{side}Handle", (x+handle, 1.26, -2.75), (.035, .3, .035), M["yellow"], .02)
-    # Counter and readable shop stations.
-    cube("Counter", (0, .65, -.55), (2.9, .65, .55), M["brown"])
-    cube("CounterTop", (0, 1.34, -.55), (3.05, .08, .67), M["charcoal"])
-    cube("CoffeeMachine", (-1.75, 1.78, -.35), (.55, .55, .38), M["charcoal"])
-    cube("CoffeePanel", (-1.75, 1.86, -.75), (.36, .27, .025), M["cyan"])
-    cyl("CoffeePot", (-1.75, 1.58, -.82), .19, .32, M["coffee"], 10)
-    # A dedicated food warmer makes the second counter interaction readable.
-    cube("FoodStation", (1.75, 1.72, -.35), (.62, .48, .4), M["charcoal"], .08)
-    cube("FoodGlass", (1.75, 1.82, -.77), (.5, .3, .025), M["glass"], .02)
-    cube("FoodPanel", (1.75, 1.42, -.79), (.28, .08, .025), M["yellow"], .015)
-    for x in (1.47, 1.75, 2.03):
-        cube("Sandwich", (x, 1.78, -.8), (.11, .08, .04), M["yellow"], .025)
-    # Wide, shallow shelves sit against the back wall instead of hiding the side stations.
-    for x in (-2.0, 2.0):
-        cube("ShelfFrame", (x, 1.25, 4.28), (1.42, 1.2, .38), M["charcoal"])
+    # Hall: a mat at the door, a bin and a standing table. People wait here.
+    cube("EntranceMat", (0, .245, -1.95), (2.3, .02, .6), M["charcoal"], .02)
+    cyl("TrashBin", (-4.05, .55, -1.75), .43, 1.1, M["green"], 10)
+    # Counter with a register: the service line of the shop.
+    cube("Counter", (0, .65, 1.15), (2.9, .65, .55), M["brown"])
+    cube("CounterTop", (0, 1.34, 1.15), (3.05, .08, .67), M["charcoal"])
+    cube("Register", (0, 1.56, 1.24), (.3, .14, .22), M["charcoal"], .04)
+    cube("RegisterScreen", (0, 1.62, 1.0), (.22, .1, .02), M["cyan"], .015)
+    # Coffee and food stand behind the counter, facing the hall.
+    cube("CoffeeMachine", (-1.95, 1.78, 1.3), (.55, .55, .38), M["charcoal"])
+    cube("CoffeePanel", (-1.95, 1.86, .9), (.36, .27, .025), M["cyan"])
+    cyl("CoffeePot", (-1.95, 1.58, .83), .19, .32, M["coffee"], 10)
+    cube("FoodStation", (1.95, 1.72, 1.3), (.62, .48, .4), M["charcoal"], .08)
+    cube("FoodGlass", (1.95, 1.82, .88), (.5, .3, .025), M["glass"], .02)
+    cube("FoodPanel", (1.95, 1.42, .86), (.28, .08, .025), M["yellow"], .015)
+    for x in (1.67, 1.95, 2.23):
+        cube("Sandwich", (x, 1.78, .85), (.11, .08, .04), M["yellow"], .025)
+    # Roller grill on the left wall: hot dogs take longer than anything else.
+    cube("GrillBase", (-3.95, .55, 4.45), (.5, .55, .95), M["charcoal"])
+    cube("GrillTop", (-3.95, 1.13, 4.45), (.54, .05, .98), M["chrome"], .02)
+    for z in (3.72, 4.07, 4.42, 4.77, 5.12):
+        cyl("GrillRoller", (-3.95, 1.22, z), .07, .88, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    for z in (3.89, 4.24, 4.59, 4.94):
+        cube("GrillSausage", (-3.95, 1.31, z), (.3, .07, .07), M["red"], .03)
+    cube("GrillHood", (-3.95, 1.72, 5.26), (.5, .46, .15), M["charcoal"], .05)
+    cube("GrillPanel", (-3.68, 1.3, 3.55), (.03, .12, .2), M["yellow"], .015)
+    # Drinks fridge on the right wall, with its own crate of stock in the back.
+    # Открытый холодильник: банки должны читаться из зала, поэтому дверцы нет.
+    cube("FridgeBack", (4.32, 1.05, 4.45), (.18, 1.05, .95), M["chrome"], .04)
+    cube("FridgeTop", (4.04, 2.01, 4.45), (.46, .09, .95), M["chrome"], .04)
+    cube("FridgeBottom", (4.04, .14, 4.45), (.46, .14, .95), M["chrome"], .04)
+    for z in (3.56, 5.34):
+        cube("FridgeSide", (4.04, 1.05, z), (.46, .92, .06), M["chrome"], .03)
+    for row in range(3):
+        cube("FridgeShelf", (4.04, .5 + row*.62, 4.45), (.42, .03, .86), M["chrome"], .01)
+        for i in range(4):
+            cyl("FridgeCan", (3.96, .68 + row*.62, 3.78 + i*.45), .07, .22, M["cyan"], 8)
+    cube("FridgeLight", (4.04, 1.9, 4.45), (.4, .04, .84), M["cyan"], .02)
+    cube("DrinkCrate", (0, .42, 4.6), (.6, .42, .42), M["brown"], .08)
+    cube("DrinkCrateBand", (0, .44, 4.16), (.4, .14, .03), M["cyan"], .02)
+    for i in range(3):
+        cyl("DrinkCrateCan", (-.28 + i*.28, .94, 4.6), .07, .22, M["cyan"], 8)
+    # Shelves against the back wall keep the depth of the room readable.
+    for x in (-1.5, 1.5):
+        cube("ShelfFrame", (x, 1.25, 6.0), (1.42, 1.2, .38), M["charcoal"])
         for row in range(3):
-            cube("Shelf", (x, .48 + row*.75, 3.86), (1.5, .045, .44), M["chrome"])
+            cube("Shelf", (x, .48 + row*.75, 5.58), (1.5, .045, .44), M["chrome"])
             for col in range(5):
                 color = M["yellow"] if (row+col)%2 else M["red"]
-                cube("Product", (x-1.02+col*.51, .68 + row*.75, 3.78), (.18,.18,.2), color, .025)
-    cube("StockCrate", (-2.75, .35, 3.18), (.48, .35, .42), M["brown"], .08)
-    cube("StockCrateMark", (-2.75, .37, 2.74), (.2, .13, .025), M["yellow"], .025)
-    # High-contrast utility points remain visible from the entrance and side aisles.
-    cube("FuseFrame", (-4.47, 1.45, 2.2), (.18, .72, .62), M["yellow"], .07)
-    cube("FuseBox", (-4.27, 1.45, 2.2), (.06, .58, .49), M["chrome"], .04)
-    cube("FuseLamp", (-4.19, 1.68, 2.2), (.025,.14,.14), M["red"], .025)
-    cube("FuseHandle", (-4.18, 1.32, 2.2), (.025,.16,.055), M["charcoal"], .02)
-    cube("LostAndFound", (3.75, .5, 2.0), (.68,.5,.48), M["brown"], .1)
-    cube("LostAndFoundLid", (3.75, 1.04, 2.0), (.72,.07,.52), M["yellow"], .04)
-    cube("LostAndFoundSign", (3.75, 1.48, 2.43), (.62,.32,.04), M["cyan"], .06)
-    cube("LostAndFoundIcon", (3.75, 1.48, 2.37), (.18,.14,.025), M["charcoal"], .035)
+                cube("Product", (x-1.02+col*.51, .68 + row*.75, 5.5), (.18,.18,.2), color, .025)
+    cube("StockCrate", (2.75, .35, 6.0), (.48, .35, .38), M["brown"], .08)
+    cube("StockCrateMark", (2.75, .37, 5.6), (.2, .13, .025), M["yellow"], .025)
+    # High-contrast utility points: the panel by the counter, the lost-and-found at the door.
+    cube("FuseFrame", (-4.47, 1.45, 1.2), (.18, .72, .62), M["yellow"], .07)
+    cube("FuseBox", (-4.27, 1.45, 1.2), (.06, .58, .49), M["chrome"], .04)
+    cube("FuseLamp", (-4.19, 1.68, 1.2), (.025,.14,.14), M["red"], .025)
+    cube("FuseHandle", (-4.18, 1.32, 1.2), (.025,.16,.055), M["charcoal"], .02)
+    cube("LostAndFound", (4.05, .5, -2.05), (.6,.5,.44), M["brown"], .1)
+    cube("LostAndFoundLid", (4.05, 1.04, -2.05), (.64,.07,.48), M["yellow"], .04)
+    cube("LostAndFoundSign", (4.05, 1.52, -1.66), (.56,.3,.04), M["cyan"], .06)
+    cube("LostAndFoundIcon", (4.05, 1.52, -1.72), (.18,.14,.025), M["charcoal"], .035)
     # Canopy and two islands.
     for x in (-2.55, 2.55):
         cube("CanopyPost", (x, 2.5, -7.4), (.16, 2.5, .16), M["white"])
@@ -232,8 +263,6 @@ def make_station():
     cube("SignPost", (-6.6,2.2,-5.2), (.12,2.2,.12), M["chrome"])
     cube("RoadSign", (-6.6,4.25,-5.2), (1.15,1.0,.13), M["red"])
     number_24("RoadSign24", (-6.6,4.34,-5.36), 1.15, mirror=True)
-    # The bin lives in the rear corner so both routes around the counter stay open.
-    cyl("TrashBin", (-3.82,.55,3.05), .43, 1.1, M["green"], 10)
     export("station")
 
 

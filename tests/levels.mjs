@@ -6,6 +6,7 @@ import {
   activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels, weatherOf, featureTags,
 } from '../src/content/levels.js';
 import { EVENT_TYPES, PLAY_MODE, createEndlessShift, getShiftConfig, isFinalCampaignShift } from '../src/content/shifts.js';
+import { MENU, MENU_IDS, STOCKS, MAX_STOCK, getMenuItem, shelfCount } from '../src/content/menu.js';
 import { migrateProgress, DEFAULT_PROGRESS, SAVE_VERSION, LEGACY_CAMPAIGN_LENGTH } from '../src/content/progress.js';
 
 const failures = [];
@@ -30,6 +31,17 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
   check(level.queueSize >= 1 && level.queueSize <= 3, `${at}: очередь ${level.queueSize} вне диапазона`);
   check(level.pumpsOnline >= 1 && level.pumpsOnline <= 3, `${at}: колонок в работе ${level.pumpsOnline}`);
   check(!!WEATHER[level.weather], `${at}: неизвестная погода ${level.weather}`);
+
+  // Витрина: продавать можно только то, что есть в таблице товаров, и на то, что продают, нужен запас.
+  level.orderMenu.forEach((id) => {
+    const item = getMenuItem(id);
+    check(!!item, `${at}: в меню товар ${id}, которого нет в витрине`);
+    if (item) check(level.startStock[item.stock] !== undefined, `${at}: у товара ${id} нет запаса ${item.stock}`);
+  });
+  check(level.orderIntensity === 0 || level.orderMenu.length > 0, `${at}: заказы есть, а продавать нечего`);
+  ['coffee', 'snack', 'soda'].forEach((stock) => {
+    check(level.startStock[stock] >= 0 && level.startStock[stock] <= MAX_STOCK, `${at}: запас ${stock} вне диапазона`);
+  });
   check(weatherOf(level).id === level.weather, `${at}: погода не находится по уровню`);
 
   // Спешащий клиент должен оставаться выполнимым: половина от и без того короткого окна — это уже предел.
@@ -103,10 +115,21 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
 
 /* ─── Механики открываются постепенно ─── */
 const firstWith = (predicate) => CAMPAIGN_LEVELS.find(predicate)?.number ?? Infinity;
+const countWith = (predicate) => CAMPAIGN_LEVELS.filter(predicate).length;
 check(CAMPAIGN_LEVELS[0].orderIntensity === 0, 'Первый уровень должен учить только заправке');
 check(CAMPAIGN_LEVELS[0].allowedEvents.length === 0, 'На первом уровне не должно быть случайных событий');
 check(firstWith((l) => l.orderMenu.includes('coffee')) === 3, 'Кофе должен открываться на 3 уровне');
 check(firstWith((l) => l.orderMenu.includes('snack')) === 6, 'Еда должна открываться на 6 уровне');
+check(firstWith((l) => l.orderMenu.includes('hotdog')) === 8, 'Хот-доги должны открываться на 8 уровне');
+check(firstWith((l) => l.orderMenu.includes('soda')) === 14, 'Газировка должна открываться на 14 уровне');
+check(countWith((l) => l.orderMenu.includes('soda')) >= 10, 'Газировка должна продаваться не на одном уровне');
+check(MENU_IDS.every((id) => CAMPAIGN_LEVELS.some((l) => l.orderMenu.includes(id))),
+  'Каждый товар витрины должен где-то продаваться');
+check(MENU_IDS.every((id) => !!STOCKS[MENU[id].stock]), 'У каждого товара должен быть известный запас');
+check(new Set(MENU_IDS.map((id) => MENU[id].station)).size === MENU_IDS.length,
+  'Товары должны готовиться в разных местах, иначе магазин не станет больше');
+check(shelfCount(12, 0) === 0 && shelfCount(12, MAX_STOCK) === 12 && shelfCount(12, 2) > 0,
+  'Витрина должна пустеть вместе с запасом');
 check(firstWith((l) => l.startStock.coffee < 5 || l.startStock.snack < 5) === 7, 'Склад должен становиться нужен с 7 уровня');
 check(firstWith((l) => l.allowedEvents.includes('spill')) === 4, 'Уборка должна открываться на 4 уровне');
 check(firstWith((l) => l.allowedEvents.includes('bag')) === 9, 'Находки должны открываться на 9 уровне');
@@ -124,8 +147,6 @@ check(firstWith((l) => l.hurryChance > 0) === 13, 'Спешащие клиент
 check(firstWith((l) => l.fuelReserve !== null) === 18, 'Приёмка топлива — с 18 уровня');
 check(HURRY_PATIENCE < 1 && HURRY_PAYOUT > 1, 'Спешащий должен платить больше, а ждать меньше');
 
-/* Новые механики не должны включиться один раз и пропасть. */
-const countWith = (predicate) => CAMPAIGN_LEVELS.filter(predicate).length;
 check(countWith((l) => l.pumpsOnline === 3) >= 8, 'Третий пост должен работать на многих ночах');
 check(countWith((l) => l.fuelReserve !== null) >= 5, 'Приёмка топлива должна встречаться не однажды');
 check(countWith((l) => l.weather !== 'clear') >= 6, 'Погода должна меняться в течение кампании');

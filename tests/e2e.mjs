@@ -11,7 +11,7 @@ await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
-const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[],canopyCaps=[],shelves=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));g.station.traverse(o=>{if(o.isMesh&&o.name.startsWith('CanopyLight')&&o.visible)canopyCaps.push(o.name);if(o.isMesh&&o.name.startsWith('ShelfFrame'))shelves.push(o)});const glass=g.assets.car.getObjectByName('FrontWindow'),trash=g.station.getObjectByName('TrashBin'),landmarks=['CoffeeMachine','FoodStation','FuseFrame','LostAndFound'].map(name=>g.station.getObjectByName(name)),reachable=o=>{if(!o)return false;const p=o.position;for(let r=.7;r<2;r+=.2)for(let i=0;i<20;i++){const a=i/20*Math.PI*2;if(!g.isBlocked(p.x+Math.cos(a)*r,p.z+Math.sin(a)*r))return true}return false};return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,-1),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(0,-2.2)&&!g.isBlocked(0,-3),binInside:!!trash&&trash.position.x+.43<4.44&&trash.position.z-.43>-2.5,carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver')),allCanopyCaps:canopyCaps.length===3,thirdBay:g.pumps.length===3&&g.isBlocked(-6.6,-7.4)&&!g.isBlocked(-8.9,-7.4),clearInterior:shelves.length===2&&shelves.every(o=>o.position.z>4)&&landmarks.every(Boolean),landmarksLabeled:g.landmarkLabels.length>=7&&g.landmarkLabels.every(o=>o.visible),landmarksReachable:landmarks.every(reachable),secondFloor:!!g.secondFloor&&!!g.secondFloor.getObjectByName('UpperFloor')&&!!g.secondFloor.getObjectByName('StairStep14')&&g.upperDoorParts.length===3}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
+const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[],canopyCaps=[],shelves=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));g.station.traverse(o=>{if(o.isMesh&&o.name.startsWith('CanopyLight')&&o.visible)canopyCaps.push(o.name);if(o.isMesh&&o.name.startsWith('ShelfFrame'))shelves.push(o)});const glass=g.assets.car.getObjectByName('FrontWindow'),trash=g.station.getObjectByName('TrashBin'),landmarks=['CoffeeMachine','FoodStation','GrillBase','FridgeBack','FuseFrame','LostAndFound'].map(name=>g.station.getObjectByName(name)),reachable=o=>{if(!o)return false;const p=o.position;for(let r=.7;r<2;r+=.2)for(let i=0;i<20;i++){const a=i/20*Math.PI*2;if(!g.isBlocked(p.x+Math.cos(a)*r,p.z+Math.sin(a)*r))return true}return false};return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,1.15)&&!g.isBlocked(0,-1),hall:!g.isBlocked(-1.85,-.28)&&!g.isBlocked(1.85,-1.24),shopStations:g.isBlocked(-3.95,4.45)&&g.isBlocked(4.05,4.45),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(0,-2.2)&&!g.isBlocked(0,-3),binInside:!!trash&&trash.position.x+.43<4.44&&trash.position.z-.43>-2.5,carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver')),allCanopyCaps:canopyCaps.length===3,thirdBay:g.pumps.length===3&&g.isBlocked(-6.6,-7.4)&&!g.isBlocked(-8.9,-7.4),clearInterior:shelves.length===2&&shelves.every(o=>o.position.z>4)&&landmarks.every(Boolean),landmarksLabeled:g.landmarkLabels.length>=7&&g.landmarkLabels.every(o=>o.visible),landmarksReachable:landmarks.every(reachable),secondFloor:!!g.secondFloor&&!!g.secondFloor.getObjectByName('UpperFloor')&&!!g.secondFloor.getObjectByName('StairStep14')&&g.upperDoorParts.length===3}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
 const music=await page.evaluate(async()=>{const {AudioSystem}=await import('/src/audio.js'),a=new AudioSystem();a.ensure();const result={procedural:!!a.music&&a.music.voices.length===5&&a.music.chords.length===4,melodic:a.music?.melodies.every(notes=>notes.length===3),soundscape:!!a.ambience?.wind&&!!a.music?.reverb&&!!a.music?.filterLfo&&!!a.music?.delay,louder:a.music?.bus.gain.value>.25,noExternalTrack:!a.music?.audioElement,muteWorks:false,volumeWorks:false};a.setMusicVolume(.35);result.volumeWorks=a.musicVolume===.35&&!!a.music.lfoGain;a.setMuted(true);result.muteWorks=a.muted===true;clearInterval(a.musicTimer);await a.ctx?.close();return result});
 if(Object.values(music).some(v=>!v))throw new Error(`Procedural ambient music failed: ${JSON.stringify(music)}`);
 const musicControl=await page.evaluate(()=>{const g=window.__nightStation,slider=document.querySelector('#music-volume'),label=document.querySelector('#music-volume-value');slider.value='65';slider.dispatchEvent(new Event('input'));const changed=g.state.musicVolume===65&&label.textContent==='65%';slider.value='80';slider.dispatchEvent(new Event('input'));return{present:slider.type==='range',changed,restored:g.state.musicVolume===80}});
@@ -24,12 +24,19 @@ const doors=await page.evaluate(()=>{const g=window.__nightStation;
   g.player.position.set(0,.26,-1.5);for(let i=0;i<10;i++)g.updateDoors(.05);const staysOpenInside=g.doorOpen===1;
   return{twoLeaves:g.doorGlass.length===2&&g.doorParts.left.length>=5&&g.doorParts.right.length>=5,closed,opensOutside,staysOpenInside,slidesApart:Math.abs(openCenters[0]-openCenters[1])>Math.abs(closedCenters[0]-closedCenters[1])+2};});
 if(Object.values(doors).some(v=>!v))throw new Error(`Automatic sliding doors failed: ${JSON.stringify(doors)}`);
-const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOpen=1;g.applyDoorOpen();const clearSegment=(a,b)=>{const steps=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.08);for(let i=0;i<=steps;i++){const t=i/steps;if(g.isBlocked(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t))return false}return true},clearRoute=points=>points.slice(1).every((point,i)=>clearSegment(points[i],point));return{rightRoute:clearRoute([[0,-2.2],[0,-1.85],[3.8,-1.85],[3.8,.8],[2,.8]]),leftRoute:clearRoute([[0,-2.2],[0,-1.85],[-3.8,-1.85],[-3.8,.8],[-2,.8]]),binAway:g.station.getObjectByName('TrashBin').position.z>2.5,mopAway:g.kit.position.z>2.5}});
+const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOpen=1;g.applyDoorOpen();const clearSegment=(a,b)=>{const steps=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.08);for(let i=0;i<=steps;i++){const t=i/steps;if(g.isBlocked(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t))return false}return true},clearRoute=points=>points.slice(1).every((point,i)=>clearSegment(points[i],point));return{
+  rightRoute:clearRoute([[0,-1.9],[2.6,-1.9],[2.6,-.35],[3.8,-.35],[3.8,2.9],[1.2,2.9]]),
+  leftRoute:clearRoute([[0,-1.9],[-2.6,-1.9],[-2.6,-.35],[-3.8,-.35],[-3.8,2.9],[-2.6,2.9]]),
+  toGrill:clearRoute([[-2.6,2.9],[-2.9,3.6],[-2.9,4.45]]),
+  toFridge:clearRoute([[1.2,2.9],[2.8,3.4],[2.8,4.45]]),
+  hallRoute:clearRoute([[-3,-1.9],[3,-1.9]]),
+  binInHall:g.station.getObjectByName('TrashBin').position.z<0,
+  mopBehindCounter:g.kit.position.z>1.9}});
 if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter are blocked: ${JSON.stringify(shopAccess)}`);
 const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const findSpot=(job,y)=>{const p=job.pos();for(let r=.2;r<=1.7;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,y))continue;g.player.position.set(x,y,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
-  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0};g.updateHud();g.createRestockJob('coffee');g.createRestockJob('snack');
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0,soda:0};g.updateHud();g.createRestockJob('coffee');g.createRestockJob('snack');
   const heights=[];for(let i=0;i<=14;i++)heights.push(g.floorHeight(5.82,-2.37+i*(5.45/14),heights.at(-1)??.26));
   out.stairsRise=heights.every((h,i)=>i===0||h>heights[i-1])&&heights.at(-1)>3.5;
   out.stairsWalkable=heights.every((h,i)=>!g.isBlocked(5.82,-2.37+i*(5.45/14),null,h));
@@ -69,7 +76,7 @@ const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=120)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const stand=g.jobs.find(j=>j.tag==='supply-coffee');
   out.standHidden=!!stand&&stand.hidden===true;
-  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:5,snack:5};g.updateHud();
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:5,snack:5,soda:5};g.updateHud();
   g.player.position.set(stand.pos().x,3.68,stand.pos().z-.55);g.updateInteraction(0);
   out.standReachable=g.nearest===stand;
   out.fullShelfRefused=!hold(()=>g.carry==='coffeeBox',40)&&g.stockVisuals.coffee.every(o=>o.visible);
@@ -80,7 +87,7 @@ const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   out.shelfEmptied=g.stockVisuals.coffee.every(o=>!o.visible);
   g.updateInteraction(0);out.standOffersReturn=g.nearest===stand&&g.jobLabel(stand).startsWith('Верните');
   out.boxGoesBack=hold(()=>g.carry===null)&&g.stockVisuals.coffee.every(o=>o.visible)&&!g.jobs.some(j=>j.tag==='restock-coffee-put');
-  g.stock={coffee:5,snack:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
+  g.stock={coffee:5,snack:5,soda:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
 if(Object.values(freeRestock).some(v=>!v))throw new Error(`Free restocking failed: ${JSON.stringify(freeRestock)}`);
 await mkdir('artifacts',{recursive:true});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(8,.26,-8);g.yaw=2.28;g.pitch=.19;g.updatePlayer(0)});await page.waitForTimeout(350);await page.screenshot({path:'artifacts/second-floor.png'});await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-3);g.yaw=0;g.pitch=-.04;g.updatePlayer(0)});
@@ -171,7 +178,7 @@ const mergeQueue=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(v=>g.despawn(v,g.cars));g.traffic.slice().forEach(v=>g.despawn(v,g.traffic));g.pumps.forEach(p=>p.car=null);return {yielded,released,trafficAdvanced};});
 if(Object.values(mergeQueue).some(v=>!v))throw new Error(`Road merge queue deadlocked: ${JSON.stringify(mergeQueue)}`);
 const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
-  for(const item of ['coffee','box','coffeeBox','snackBox','mop','tools','hose','snack','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
+  for(const item of ['coffee','box','coffeeBox','snackBox','sodaBox','mop','tools','hose','snack','hotdog','soda','bag']){g.carry=item;g.updateCarry();seen[item]=g.hands.current===item&&g.hands.rig.visible}
   g.carry=null;g.updateCarry();seen.emptyHidden=!g.hands.rig.visible;
   g.carry='coffee';g.updateCarry();g.hands.update(.016,{moving:true,acting:true,yawDelta:.01,pitchDelta:0});
   seen.animates=Number.isFinite(g.hands.items.coffee.position.z);return seen;});
@@ -214,7 +221,7 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   goTo(powered.pos());out.poweredActionBlocked=!hold(()=>poweredCompleted,40)&&document.querySelector('#prompt-subtitle').textContent.includes('Нет электричества');
   goTo(panel.pos());
   out.panelBlockedWithoutTools=!hold(()=>!g.jobs.includes(panel),40)&&g.blackout;
-  goTo({x:-4.28,z:-.45});
+  goTo(g.jobs.find(j=>j.tag==='stand-tools').pos());
   out.tookToolsForPanel=hold(()=>g.carry==='tools');
   goTo(panel.pos());
   out.panelRepaired=hold(()=>!g.jobs.includes(panel))&&!g.blackout;
@@ -226,12 +233,12 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   g.eventBrokenPump();
   const repair=g.jobs.find(j=>j.tag==='broken');
   out.pumpNeedsTools=!!repair&&repair.need==='tools';
-  goTo({x:-4.28,z:-.45});
+  goTo(g.jobs.find(j=>j.tag==='stand-tools').pos());
   out.tookTools=hold(()=>g.carry==='tools');
   goTo(repair.pos());
   out.repaired=hold(()=>!g.jobs.includes(repair))&&g.pumps.every(p=>!p.broken);
   out.toolsAreBack=g.carry===null;
-  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===4&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
+  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===5&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
   return out;});
 if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
 const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();
@@ -268,9 +275,9 @@ const jump=await page.evaluate(()=>{const g=window.__nightStation;
   for(let i=0;i<40;i++)g.updateJump(1/60);
   const dipGone=g.landDip<.01;
   // в прыжке стены держат так же, как на земле
-  g.player.position.set(0,.26,-1.9);g.yaw=Math.PI;g.keys.Space=true;g.updateJump(1/60);g.keys.Space=false;
+  g.player.position.set(0,.26,-.6);g.yaw=Math.PI;g.keys.Space=true;g.updateJump(1/60);g.keys.Space=false;
   g.keys.KeyW=true;for(let i=0;i<45;i++)g.updatePlayer(1/60);g.keys.KeyW=false;
-  const throughCounter=g.player.position.z>-1.4;
+  const throughCounter=g.player.position.z>.12;
   g.yaw=0;g.resetJump();g.updatePlayer(1/60);
   return {eyeHeight:Math.abs(ground-1.62)<.01,rises:peak>.5&&peak<1.1,airtime:air>.4&&air<.9,lands:landed,dipRecovers:dipGone,keepsWalls:!throughCounter,restsOnGround:Math.abs(g.camera.position.y-1.62)<.02};});
 if(Object.values(jump).some(v=>!v))throw new Error(`Jump failed: ${JSON.stringify(jump)}`);
@@ -459,6 +466,103 @@ const trafficJams=await page.evaluate(()=>{const g=window.__nightStation,out={};
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.pumps.forEach(p=>p.car=null);
   return out;});
 if(Object.values(trafficJams).some(v=>!v))throw new Error(`Traffic jam rules failed: ${JSON.stringify(trafficJams)}`);
+const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
+  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const walk=(steps=1500,done=()=>false)=>{for(let i=0;i<steps&&!done();i++)g.updateCustomers(.05);return done()};
+  g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
+  g.stock={coffee:5,snack:5,soda:5};g.updateHud();
+  g.shiftConfig={...g.shiftConfig,orderIntensity:1};
+  // Водитель выходит из машины сразу, не дожидаясь заправки.
+  g.spawnCar();const car=g.cars[0];
+  for(let i=0;i<2200&&car.status!=='waiting';i++)g.updateCars(.05);
+  out.parked=car.status==='waiting';
+  out.customerSent=!!car.customer&&g.customers.length===1&&car.customer.state==='walkingIn';
+  out.fuelJobWaits=g.jobs.some(j=>j.car===car&&j.kind==='hose-pickup');
+  out.walksIn=walk(1600,()=>g.customers[0]?.state==='waiting');
+  const customer=g.customers[0];
+  out.atCounter=!!customer&&customer.position.z>-2.3&&customer.position.z<0&&Math.abs(customer.position.x)<3;
+  const prep=g.jobs.find(j=>j.tag==='order-prep');
+  out.orderAppears=!!prep&&prep.kind==='order';
+  out.prepReachable=!!prep&&reach(prep);
+  const item=g.shiftConfig.orderMenu.includes(customer.order)&&customer.order;
+  out.knownItem=!!item;
+  const stockBefore=g.stock[{coffee:'coffee',snack:'snack',hotdog:'snack',soda:'soda'}[customer.order]];
+  out.prepared=hold(()=>!!g.carry)&&g.hands.current===g.carry;
+  out.stockSpent=g.stock[{coffee:'coffee',snack:'snack',hotdog:'snack',soda:'soda'}[customer.order]]===stockBefore-1;
+  const give=g.jobs.find(j=>j.tag==='order-give');
+  out.handoverAtCounter=!!give&&Math.abs(give.pos().z-.52)<.01&&give.need===g.carry;
+  out.giveReachable=!!give&&reach(give);
+  const money=g.state.money;
+  out.handed=hold(()=>g.carry===null)&&g.state.money>money;
+  out.customerLeaves=customer.state==='walkingOut';
+  // Машина ждёт своего покупателя и уезжает только вместе с ним.
+  car.fueled=true;g.releaseCar(car);
+  out.waitsForCustomer=car.status==='waiting';
+  out.customerReturns=walk(1600,()=>g.customers.length===0)&&car.customerDone===true;
+  out.servedCounted=g.served===1;
+  g.leaveCar(car);for(let i=0;i<60;i++)g.updateCars(.05);
+  out.carLeaves=car.status==='leaving';
+  // Пустая полка не даёт приготовить, но сразу ставит задачу пополнения.
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();
+  g.stock={coffee:0,snack:5,soda:5};g.updateHud();
+  g.spawnCar();const thirsty=g.cars[0];thirsty.pump=g.pumps[0];thirsty.side=-1;thirsty.group.position.set(-4.85,-.05,-7.4);
+  const guest=g.sendCustomer(thirsty,'coffee');
+  out.secondCustomer=!!guest;
+  walk(1600,()=>guest.state==='waiting');
+  g.addCounterOrder(guest);
+  const dry=g.jobs.find(j=>j.tag==='order-prep');
+  out.emptyShelfBlocks=!!dry&&reach(dry)&&!hold(()=>!!g.carry,80)&&g.jobs.some(j=>j.tag==='restock-coffee-pick');
+  // Покупатель уходит недовольным, если заказ не выдали.
+  const lostBefore=g.lost;
+  dry.onFail();
+  out.lostCustomer=g.lost===lostBefore+1&&guest.state==='walkingOut';
+  walk(1600,()=>g.customers.length===0);
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  g.stock={coffee:5,snack:5,soda:5};g.updateHud();
+  return out;});
+if(Object.values(shopCustomers).some(v=>!v))throw new Error(`Shop customers failed: ${JSON.stringify(shopCustomers)}`);
+const shopMenu=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
+  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  g.setState({...g.state,shift:30,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  g.jobs=g.jobs.filter(j=>j.hidden);
+  // Каждый товар готовится в своём месте и попадает в руки.
+  out.items={};
+  for(const id of ['coffee','snack','hotdog','soda']){
+    g.stock={coffee:5,snack:5,soda:5};g.carry=null;g.updateCarry();g.updateHud();
+    const car={side:1,patience:60,group:{position:{x:-4.85,y:0,z:-7.4}}};
+    const guest=g.sendCustomer(car,id);
+    guest.state='waiting';guest.setPath([]);guest.position.copy(g.counterPoint(guest)).setY(.26);
+    g.addCounterOrder(guest);
+    const prep=g.jobs.find(j=>j.tag==='order-prep');
+    const ok=!!prep&&reach(prep)&&hold(()=>!!g.carry);
+    const give=g.jobs.find(j=>j.tag==='order-give');
+    const handed=ok&&!!give&&reach(give)&&hold(()=>g.carry===null);
+    out.items[id]=ok&&handed;
+    g.clearCustomers();g.jobs=g.jobs.filter(j=>j.hidden);
+  }
+  out.fourItems=Object.values(out.items).every(Boolean)&&Object.keys(out.items).length===4;
+  // Газировку пополняют из ящика в подсобке, а не со склада наверху.
+  g.stock={coffee:5,snack:5,soda:0};g.carry=null;g.updateCarry();g.updateHud();
+  g.createRestockJob('soda');
+  const pick=g.jobs.find(j=>j.tag==='restock-soda-pick');
+  out.sodaCratePick=!!pick&&pick.pos().y<2&&reach(pick);
+  out.sodaTaken=!!pick&&hold(()=>g.carry==='sodaBox');
+  const put=g.jobs.find(j=>j.tag==='restock-soda-put');
+  out.sodaFilled=!!put&&reach(put)&&hold(()=>g.stock.soda===5)&&g.carry===null;
+  out.hudShowsSoda=document.querySelector('#stock-soda').textContent==='5/5'&&!document.querySelector('#soda-chip').classList.contains('hidden');
+  // Витрины пустеют вместе с запасом.
+  const cans=g.shelfVisuals.soda.filter(o=>o.visible).length;
+  g.stock.soda=1;g.renderShelves();
+  out.shelvesDrain=g.shelfVisuals.soda.filter(o=>o.visible).length<cans&&g.shelfVisuals.soda.length>0;
+  g.stock.soda=5;g.renderShelves();
+  out.shelvesRefill=g.shelfVisuals.soda.filter(o=>o.visible).length===cans;
+  return out;});
+if(Object.entries(shopMenu).some(([key,value])=>key!=='items'&&!value))throw new Error(`Shop menu failed: ${JSON.stringify(shopMenu)}`);
 const thirdBay=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const startLevel=number=>{g.setState({...g.state,shift:number,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[]};
   // Двенадцатый уровень открывает левый пост: три таблички «ЗАКРЫТО» гаснут все разом.
@@ -636,4 +740,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();

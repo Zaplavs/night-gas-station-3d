@@ -76,6 +76,34 @@ function crate(accent=PAL.tape,key='stock'){
   return g;
 }
 
+/* Хот-дог с гриля: булка, сосиска и зигзаг горчицы. */
+function hotdog(){
+  const g=new THREE.Group();
+  put(g,box('bunbase',.062,.045,.21),mat('bread',PAL.bread,.9),0,-.022);
+  put(g,box('buntop',.062,.042,.21),mat('bread',PAL.bread,.9),0,.03);
+  put(g,cyl('sausage',.027,.027,.22,8),mat('sausage',0xb4472a,.72),0,.012,0,Math.PI/2);
+  for(let i=0;i<4;i++)put(g,box('mustard',.012,.008,.03),mat('mustard',0xe8b62c,.6),(i%2?.014:-.014),.038,-.075+i*.05);
+  put(g,box('napkin',.09,.006,.12),mat('paper',PAL.paper,.95),-.03,-.05,.02,0,.3);
+  const h=hand(1);h.position.set(.005,-.08,.055);h.rotation.set(.12,0,.2);g.add(h);
+  g.position.set(.245,-.23,-.55);g.rotation.set(.08,-.28,-.1);
+  g.userData.anim=(o,t,use)=>{o.rotation.z=-.1+Math.sin(t*1.5)*.03;o.position.z=-.55+use*.12;o.position.y=-.23-use*.03};
+  return g;
+}
+
+/* Банка газировки из холодильника. */
+function soda(){
+  const g=new THREE.Group();
+  put(g,cyl('canbody',.043,.043,.135,12),mat('can',0x2f7fd0,.5,.35));
+  put(g,cyl('cantop',.041,.041,.014,12),mat('steel',PAL.steel,.32,.7),0,.075);
+  put(g,cyl('canbase',.041,.041,.012,12),mat('steel',PAL.steel,.32,.7),0,-.072);
+  put(g,cyl('canband',.0445,.0445,.045,12),mat('canband',0xf0e6cd,.75),0,-.005);
+  put(g,box('candrop',.02,.016,.006),mat('candrop',0xbfe6f5,.4),0,.03,-.044);
+  const h=hand(1);h.position.set(-.005,-.045,.05);h.rotation.set(.1,0,.18);g.add(h);
+  g.position.set(.25,-.2,-.56);g.rotation.set(.1,-.18,-.08);
+  g.userData.anim=(o,t,use)=>{o.rotation.x=.1+Math.sin(t*1.7)*.03+use*.45;o.position.z=-.56+use*.12};
+  return g;
+}
+
 function mop(){
   const g=new THREE.Group();
   put(g,cyl('stick',.019,.019,.8,8),mat('steel',PAL.steel,.45,.55));
@@ -159,7 +187,7 @@ export class HandView{
     this.sway=new THREE.Vector2();this.swayTo=new THREE.Vector2();this.aspect=0;
   }
   build(assets){
-    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),bag:lostBag(assets&&assets.bag)};
+    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),hotdog:hotdog(),soda:soda(),sodaBox:crate(0x69c96f,'soda-stock'),bag:lostBag(assets&&assets.bag)};
     for(const [name,group] of Object.entries(made)){group.visible=false;this.items[name]=group;this.rig.add(group)}
   }
   set(name){

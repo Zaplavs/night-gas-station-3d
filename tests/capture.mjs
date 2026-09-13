@@ -8,7 +8,16 @@ await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,
 await page.setViewportSize({width:1280,height:720});await page.click('#new-btn');await page.click('#tutorial-start');
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:30000});await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/01-service.png'});await page.screenshot({path:'public/tutorial/01-controls.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(.4,.26,-3.4);g.yaw=.3;g.pitch=-.06;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'public/tutorial/02-pumps.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-2.75);g.yaw=Math.PI;g.pitch=-.05;g.carry='coffee';g.updateCarry();g.hands.raise=1;g.updatePlayer(0)});await page.waitForTimeout(400);await page.screenshot({path:'public/tutorial/03-shop.png'});
+await page.evaluate(()=>{const g=window.__nightStation;
+  g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
+  const car={side:1,patience:60,group:{position:{x:-4.85,y:0,z:-7.4}}};
+  const guest=g.sendCustomer(car,'coffee');
+  for(let i=0;i<1400&&guest.state!=='waiting';i++)g.updateCustomers(.05);
+  if(guest.state==='walkingIn'){guest.state='waiting';guest.faceTowards(guest.position.x,guest.position.z+2);g.addCounterOrder(guest)}
+  g.carry='coffee';g.updateCarry();g.hands.raise=1;
+  g.player.position.set(.55,.26,2.6);g.yaw=.7;g.pitch=-.08;g.updatePlayer(0);g.updateInteraction(0)});
+await page.waitForTimeout(500);await page.screenshot({path:'public/tutorial/03-shop.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-5);g.yaw=Math.PI;g.pitch=-.04;g.carry='mop';g.updateCarry();g.hands.raise=1;g.eventBag();g.updatePlayer(0)});await page.waitForTimeout(500);await page.screenshot({path:'public/tutorial/04-events.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/02-forgotten-bag.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-6);g.yaw=Math.PI;g.pitch=.26;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'promo/screenshots/05-signage.png'});

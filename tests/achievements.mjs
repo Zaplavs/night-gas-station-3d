@@ -30,7 +30,7 @@ check(ACHIEVEMENTS.some((item) => item.stat === 'chapters'), 'Прохожден
 check(ACHIEVEMENTS.filter((item) => item.stat === 'chapters').length === 6, 'Должно быть по достижению на главу');
 
 /* Каждая механика смены должна быть чем-то отмечена. */
-for (const stat of ['refuels', 'coffee', 'snacks', 'restocks', 'spills', 'repairs', 'blackouts', 'bags', 'vans',
+for (const stat of ['refuels', 'coffee', 'snacks', 'hotdogs', 'sodas', 'restocks', 'spills', 'repairs', 'blackouts', 'bags', 'vans',
   'tankers', 'hurried', 'rainNights', 'rushes', 'endless', 'jumps']) {
   check(ACHIEVEMENTS.some((item) => item.stat === stat), `Механика ${stat} не отмечена ни одним достижением`);
 }
