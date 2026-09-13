@@ -429,6 +429,21 @@ export function getLevel(number) {
   return CAMPAIGN_LEVELS[index];
 }
 
+/* Кампания идёт по порядку: открыт следующий за пройденным уровень.
+   Всё, что уже пройдено, можно переиграть в любой момент. */
+export function nextLevel(levelsCleared = 0) {
+  const cleared = Math.max(0, Math.floor(Number(levelsCleared) || 0));
+  return Math.min(CAMPAIGN_LEVEL_COUNT, cleared + 1);
+}
+
+export function isLevelUnlocked(number, levelsCleared = 0) {
+  return Math.floor(Number(number) || 0) <= nextLevel(levelsCleared);
+}
+
+export function chapterLevels(chapterNumber) {
+  return CAMPAIGN_LEVELS.filter((level) => level.chapter === chapterNumber);
+}
+
 export function getChapter(level) {
   return CHAPTERS.find((chapter) => chapter.number === level?.chapter) ?? CHAPTERS[0];
 }

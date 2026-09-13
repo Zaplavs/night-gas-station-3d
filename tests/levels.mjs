@@ -3,7 +3,7 @@
 import {
   CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
   getLevel, getChapter, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
 } from '../src/content/levels.js';
 import { EVENT_TYPES, PLAY_MODE, createEndlessShift, getShiftConfig, isFinalCampaignShift } from '../src/content/shifts.js';
 import { migrateProgress, DEFAULT_PROGRESS, SAVE_VERSION, LEGACY_CAMPAIGN_LENGTH } from '../src/content/progress.js';
@@ -139,6 +139,19 @@ check(activeRush(rushLevel, rush.at + 1) === rush, 'Наплыв должен в
 check(activeRush(rushLevel, rush.at - 1) === null, 'До своего времени наплыв не активен');
 check(activeRush(rushLevel, rush.at + rush.duration + 1) !== rush, 'Наплыв должен заканчиваться');
 check(activeRush(getLevel(1), 100) === null, 'На первом уровне наплывов нет');
+
+/* ─── Доступ к уровням для меню выбора ─── */
+check(nextLevel(0) === 1, 'Без прогресса открыт только первый уровень');
+check(nextLevel(7) === 8, 'После семи пройденных ночей открыта восьмая');
+check(nextLevel(CAMPAIGN_LEVEL_COUNT) === CAMPAIGN_LEVEL_COUNT, 'За тридцатый уровень кампания не уходит');
+check(isLevelUnlocked(1, 0) && !isLevelUnlocked(2, 0), 'В начале доступен ровно один уровень');
+check(isLevelUnlocked(4, 9) && isLevelUnlocked(10, 9) && !isLevelUnlocked(11, 9),
+  'Пройденное переигрывается, следующее открыто, дальше закрыто');
+check(CHAPTERS.every((chapter) => chapterLevels(chapter.number).length === LEVELS_PER_CHAPTER),
+  'В каждой главе должно быть по пять уровней');
+check(chapterLevels(3).every((level) => level.chapter === 3), 'Глава не должна подбирать чужие уровни');
+check(CHAPTERS.flatMap((chapter) => chapterLevels(chapter.number)).length === CAMPAIGN_LEVEL_COUNT,
+  'Главы вместе должны покрывать всю кампанию');
 
 /* ─── Бесконечный режим после кампании ─── */
 const endless = createEndlessShift(4);

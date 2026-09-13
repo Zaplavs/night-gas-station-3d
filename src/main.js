@@ -6,7 +6,7 @@ import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, 
 import { HandView } from './hands.js';
 import { ROAD, laneFor, entryPath, reversePath, exitPath, passPath, queuePoint, queueEntryPath, queueAdvancePath, queueToPumpPath, addLights, drive, setPath } from './traffic.js';
 import { createSky, MOON_DIRECTION } from './sky.js';
-import { CAMPAIGN_SHIFT_COUNT, PLAY_MODE, getShiftConfig, isFinalCampaignShift, randomFromRange, getChapter, goalLines, goalProgress, evaluateGoal, hardFailure, activeRush, dueScripted } from './content/shifts.js';
+import { CAMPAIGN_SHIFT_COUNT, CHAPTERS, PLAY_MODE, getShiftConfig, isFinalCampaignShift, randomFromRange, getChapter, chapterLevels, nextLevel, isLevelUnlocked, goalLines, goalProgress, evaluateGoal, hardFailure, activeRush, dueScripted } from './content/shifts.js';
 import { DEFAULT_PROGRESS, migrateProgress } from './content/progress.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -14,7 +14,7 @@ const ui={
   loading:$('#loading'),loadFill:$('#load-fill'),loadText:$('#loading-text'),menu:$('#menu'),hud:$('#hud'),tasks:$('#tasks'),taskList:$('#task-list'),stockCoffee:$('#stock-coffee'),stockSnack:$('#stock-snack'),levelName:$('#level-name'),levelGoal:$('#level-goal'),
   money:$('#money'),rep:$('#reputation'),clock:$('#clock'),shift:$('#shift-label'),prompt:$('#prompt'),promptKey:$('#prompt-key'),promptTitle:$('#prompt-title'),promptSub:$('#prompt-subtitle'),
   progress:$('#progress'),progressFill:$('#progress i'),toasts:$('#toast-zone'),carrying:$('#carrying'),event:$('#event-card'),eventIcon:$('#event-icon'),eventKind:$('#event-kind'),eventTitle:$('#event-title'),eventText:$('#event-text'),
-  tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),campaignComplete:$('#campaign-complete'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
+  tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),campaignComplete:$('#campaign-complete'),levels:$('#levels'),levelGrid:$('#level-grid'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
 };
 const audio=new AudioSystem();
 const isTouch=matchMedia('(pointer:coarse)').matches;
@@ -132,6 +132,12 @@ class NightStationGame{
   }
   lockPointer(){if(isTouch||this.mode!=='playing'||document.pointerLockElement===this.canvas)return;try{const result=this.canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
   setupUI(){
+    $('#levels-btn').onclick=()=>this.openLevels('menu');
+    $('#levels-close').onclick=()=>this.closeLevels();
+    $('#results-levels').onclick=()=>this.openLevels('results');
+    $('#campaign-levels').onclick=()=>this.openLevels('campaign');
+    $('#levels-endless').onclick=()=>this.startEndless();
+    ui.levelGrid.onclick=event=>{const tile=event.target.closest('[data-level]');if(tile)this.playLevel(Number(tile.dataset.level))};
     $('#continue-btn').onclick=()=>this.prepareStart(false);$('#new-btn').onclick=()=>this.prepareStart(true);$('#tutorial-start').onclick=()=>{ui.tutorial.classList.add('hidden');this.state.tutorial=true;this.startShift();this.lockPointer()};
     $('#pause-btn').onclick=()=>this.pause();$('#resume-btn').onclick=()=>this.resume();$('#menu-btn').onclick=()=>{ui.pause.classList.add('hidden');this.showMenu()};$('#sound-btn').onclick=()=>this.toggleSound();
     const musicVolume=$('#music-volume'),musicValue=$('#music-volume-value');musicVolume.oninput=()=>{this.state.musicVolume=Number(musicVolume.value);musicValue.textContent=`${this.state.musicVolume}%`;audio.setMusicVolume(this.state.musicVolume/100)};musicVolume.onchange=()=>saveProgress(this.state);
@@ -142,11 +148,7 @@ class NightStationGame{
       await showInterstitial();this.startShift()
     };
     $('#campaign-menu').onclick=()=>this.showMenu();
-    $('#campaign-endless').onclick=()=>{
-      this.setState({...this.state,playMode:PLAY_MODE.ENDLESS,shift:1,campaignComplete:false,tutorial:true});
-      ui.campaignComplete.classList.add('hidden');
-      this.startShift()
-    };
+    $('#campaign-endless').onclick=()=>this.startEndless();
     $('#campaign-restart').onclick=()=>{
       const preferences={tutorial:true,sound:this.state.sound,musicVolume:this.state.musicVolume};
       this.setState({...DEFAULT_PROGRESS,...preferences});
@@ -158,9 +160,8 @@ class NightStationGame{
   }
   setState(data){if(!data)return;this.state=migrateProgress(data);this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
   showMenu(){this.mode='menu';document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
-  prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
+  prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(this.state.playMode===PLAY_MODE.CAMPAIGN)this.state.shift=nextLevel(this.state.levelsCleared);if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
-    if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}
     this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;
     this.clearShift();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.lost=0;this.scriptedFired.clear();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.applyLevelSetup();this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.upperDoorOpen=0;this.applyDoorOpen();this.applyUpperDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,GROUND_Y,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');this.announceLevel();this.updateHud();saveProgress(this.state);this.lockPointer()
   }
@@ -506,6 +507,45 @@ class NightStationGame{
   freeHands(){if(!this.carry)return true;if(this.carry==='mop'||this.carry==='tools'){const note=STOW_NOTE[this.carry];this.stowTool();this.toast(note);return true}this.toast('Сначала отдайте то, что уже в руках');return false}
   stowTool(){if(this.carry!=='mop'&&this.carry!=='tools')return;if(this.carry==='mop')this.kitMop.forEach(m=>m.visible=true);this.carry=null;this.updateCarry()}
   jobLabel(job){return typeof job.title==='function'?job.title():job.title}
+  /* ─────────── Выбор уровня ─────────── */
+  openLevels(from='menu'){
+    audio.ensure();this.levelsReturn=from;
+    ui.menu.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');
+    this.renderLevels();ui.levels.classList.remove('hidden')
+  }
+  closeLevels(){
+    ui.levels.classList.add('hidden');
+    if(this.levelsReturn==='results')ui.results.classList.remove('hidden');
+    else if(this.levelsReturn==='campaign')this.showCampaignComplete();
+    else this.showMenu()
+  }
+  renderLevels(){
+    const cleared=Math.min(this.state.levelsCleared,CAMPAIGN_SHIFT_COUNT),current=nextLevel(cleared);
+    $('#levels-progress').textContent=`пройдено ${cleared} из ${CAMPAIGN_SHIFT_COUNT}`;
+    ui.levelGrid.innerHTML=CHAPTERS.map(chapter=>{
+      const tiles=chapterLevels(chapter.number).map(level=>{
+        const done=level.number<=cleared,open=isLevelUnlocked(level.number,cleared);
+        // Закрытый уровень не дразнит целями: сначала предыдущая ночь.
+        const note=open?goalLines(level.goal).join(' · '):'Откроется после предыдущей ночи';
+        const classes=['level-tile',done?'done':'',open?'':'locked',level.number===current?'current':''].filter(Boolean).join(' ');
+        return `<button class="${classes}" data-level="${level.number}"${open?'':' disabled'}><span class="level-no">${done?'✓ ':''}${level.number}</span>${level.exam?'<i class="exam-mark">ЭКЗАМЕН</i>':''}<b>${level.name}</b><small>${note}</small></button>`
+      }).join('');
+      return `<section class="level-chapter"><header><span>ГЛАВА ${chapter.number}</span><b>${chapter.title}</b><small>${chapter.subtitle}</small></header><div class="level-row">${tiles}</div></section>`
+    }).join('');
+    $('#levels-endless').classList.toggle('hidden',!this.state.campaignComplete)
+  }
+  playLevel(number){
+    if(!isLevelUnlocked(number,this.state.levelsCleared))return;
+    audio.ensure();this.state.playMode=PLAY_MODE.CAMPAIGN;this.state.shift=number;
+    ui.levels.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');
+    if(!this.state.tutorial){ui.tutorial.classList.remove('hidden');return}
+    this.startShift()
+  }
+  startEndless(){
+    this.setState({...this.state,playMode:PLAY_MODE.ENDLESS,shift:1,campaignComplete:false,tutorial:true});
+    ui.levels.classList.add('hidden');ui.campaignComplete.classList.add('hidden');
+    this.startShift()
+  }
   /* ─────────── Уровень: подготовка, брифинг, расписание, цель ─────────── */
   queueLimit(){return this.shiftConfig.queueSize+(this.currentRush?this.currentRush.queueBoost:0)}
   applyLevelSetup(){
@@ -558,7 +598,11 @@ class NightStationGame{
     const earned=Math.max(0,Math.floor(this.state.money-this.shiftStartMoney)),verdict=this.judgeLevel(earned),campaign=this.shiftConfig.mode===PLAY_MODE.CAMPAIGN,campaignDone=isFinalCampaignShift(this.shiftConfig)&&verdict.passed;this.shiftEarned=earned;this.state.best=Math.max(this.state.best,earned);if(this.shiftConfig.mode===PLAY_MODE.CAMPAIGN){this.state.campaignEarnings+=earned;this.state.campaignServed+=this.served}
     $('#result-money').textContent=`₽${earned}`;$('#result-served').textContent=this.served;$('#result-rep').textContent=`${this.state.rep.toFixed(1)}★`;$('#result-best').textContent=`₽${Math.floor(this.state.best)}`;this.renderVerdict(verdict,campaign,campaignDone);
     if(this.shiftConfig.mode===PLAY_MODE.ENDLESS)this.state.shift=this.shiftConfig.number+1;
-    else if(verdict.passed){this.state.levelsCleared=Math.max(this.state.levelsCleared,this.shiftConfig.number);if(campaignDone)this.state.campaignComplete=true;else this.state.shift=Math.min(CAMPAIGN_SHIFT_COUNT,this.shiftConfig.number+1)}
+    else if(verdict.passed){
+      this.state.levelsCleared=Math.max(this.state.levelsCleared,this.shiftConfig.number);
+      this.state.shift=Math.min(CAMPAIGN_SHIFT_COUNT,this.shiftConfig.number+1);
+      if(this.state.levelsCleared>=CAMPAIGN_SHIFT_COUNT)this.state.campaignComplete=true
+    }
     const upgrades=$('.upgrades');upgrades.classList.toggle('hidden',campaignDone);this.updateUpgradeButtons();
     const next=$('#next-shift');next.innerHTML=campaignDone?'ЗАВЕРШИТЬ КАМПАНИЮ <span>→</span>':!campaign?'СЛЕДУЮЩАЯ НОЧЬ <span>→</span>':verdict.passed?'СЛЕДУЮЩИЙ УРОВЕНЬ <span>→</span>':'ПОВТОРИТЬ УРОВЕНЬ <span>↻</span>';
     const reward=$('#reward-btn');reward.textContent=`СМОТРЕТЬ РЕКЛАМУ: +₽${this.rewardBonus()}`;reward.classList.toggle('hidden',!gpState.available);reward.disabled=false;saveProgress(this.state)

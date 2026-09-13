@@ -37,19 +37,21 @@ export function migrateProgress(saved) {
   // Сейв из семисменной кампании: зачёт сохраняем, но ночи 8-30 ещё впереди.
   const legacyCampaignDone = version < SAVE_VERSION && playMode === PLAY_MODE.CAMPAIGN
     && (Boolean(source.campaignComplete) || requestedShift > LEGACY_CAMPAIGN_LENGTH);
-  const campaignComplete = playMode === PLAY_MODE.CAMPAIGN && !legacyCampaignDone
-    ? Boolean(source.campaignComplete) && requestedShift >= CAMPAIGN_SHIFT_COUNT
-    : false;
-
   let shift = requestedShift;
   if (playMode === PLAY_MODE.CAMPAIGN) {
-    if (legacyCampaignDone) shift = Math.min(CAMPAIGN_SHIFT_COUNT, LEGACY_CAMPAIGN_LENGTH + 1);
-    else if (campaignComplete) shift = CAMPAIGN_SHIFT_COUNT;
-    else shift = Math.min(requestedShift, CAMPAIGN_SHIFT_COUNT);
+    shift = legacyCampaignDone
+      ? Math.min(CAMPAIGN_SHIFT_COUNT, LEGACY_CAMPAIGN_LENGTH + 1)
+      : Math.min(requestedShift, CAMPAIGN_SHIFT_COUNT);
   }
 
   const upgrades = source.upgrades && typeof source.upgrades === 'object' ? source.upgrades : {};
   const clearedFallback = playMode === PLAY_MODE.CAMPAIGN ? shift - 1 : 0;
+  const levelsCleared = Math.min(
+    CAMPAIGN_SHIFT_COUNT,
+    Math.max(nonNegativeInt(source.levelsCleared, clearedFallback), clearedFallback),
+  );
+  const campaignComplete = playMode === PLAY_MODE.CAMPAIGN && !legacyCampaignDone
+    && (Boolean(source.campaignComplete) || levelsCleared >= CAMPAIGN_SHIFT_COUNT);
 
   return {
     ...DEFAULT_PROGRESS,
@@ -59,10 +61,7 @@ export function migrateProgress(saved) {
     campaignComplete,
     campaignEarnings: nonNegativeInt(source.campaignEarnings),
     campaignServed: nonNegativeInt(source.campaignServed),
-    levelsCleared: Math.min(
-      CAMPAIGN_SHIFT_COUNT,
-      Math.max(nonNegativeInt(source.levelsCleared, clearedFallback), clearedFallback),
-    ),
+    levelsCleared,
     money: nonNegativeInt(source.money),
     shift,
     rep: Math.max(1, Math.min(5, finiteNumber(source.rep, DEFAULT_PROGRESS.rep))),

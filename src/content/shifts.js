@@ -1,7 +1,7 @@
 import {
   CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
   getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
 } from './levels.js';
 
 export const PLAY_MODE = Object.freeze({
@@ -21,7 +21,7 @@ export const EVENT_TYPES = Object.freeze([
 export {
   CAMPAIGN_LEVELS, CHAPTERS, LEVELS_PER_CHAPTER,
   getChapter, getLevel, goalLines, goalProgress, evaluateGoal, hardFailure,
-  activeRush, dueScripted,
+  activeRush, dueScripted, nextLevel, isLevelUnlocked, chapterLevels,
 };
 
 /* Кампания — это таблица уровней; смена и уровень здесь одно и то же. */

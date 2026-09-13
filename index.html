@@ -65,6 +65,7 @@
       <p class="lead">Обычная работа. Необычные посетители.<br>Главное — дотянуть до рассвета.</p>
       <div class="menu-actions">
         <button id="continue-btn" class="primary">ПРОДОЛЖИТЬ СМЕНУ <span>→</span></button>
+        <button id="levels-btn" class="secondary">УРОВНИ</button>
         <button id="new-btn" class="secondary">НОВАЯ ИГРА</button>
       </div>
       <div class="controls-hint"><span><kbd>WASD</kbd> двигаться</span><span><kbd>E</kbd> действие</span><span><kbd>Shift</kbd> бег</span><span><kbd>Space</kbd> прыжок</span></div>
@@ -92,6 +93,17 @@
       <div class="guide-media"><img id="guide-image" src="tutorial/01-controls.png" alt="Подсказка по игре"></div>
       <div class="guide-copy"><span id="guide-step">1 / 4</span><h2 id="guide-title">Как двигаться</h2><p id="guide-text">Кликните по игре и осматривайтесь мышью. WASD — движение, Shift — бег, E — действие.</p></div>
       <div class="guide-nav"><button id="guide-prev" class="secondary">← НАЗАД</button><div id="guide-dots"></div><button id="guide-next" class="primary">ДАЛЬШЕ →</button></div>
+    </div>
+  </section>
+
+  <section id="levels" class="screen modal-screen hidden">
+    <div class="dialog levels-card">
+      <div class="guide-top">
+        <p class="eyebrow">ВЫБОР УРОВНЯ · <span id="levels-progress">пройдено 0 из 30</span></p>
+        <button id="levels-close" aria-label="Закрыть">×</button>
+      </div>
+      <div id="level-grid"></div>
+      <button id="levels-endless" class="secondary hidden">БЕСКОНЕЧНЫЙ РЕЖИМ <span>∞</span></button>
     </div>
   </section>
 
@@ -125,6 +137,7 @@
       </div>
       <button id="reward-btn" class="secondary hidden">СМОТРЕТЬ РЕКЛАМУ: НАДБАВКА К ЗАРАБОТКУ</button>
       <button id="next-shift" class="primary">СЛЕДУЮЩАЯ СМЕНА <span>→</span></button>
+      <button id="results-levels" class="text-btn">Выбрать другой уровень</button>
     </div>
   </section>
 
@@ -141,6 +154,7 @@
       </div>
       <button id="campaign-endless" class="primary">БЕСКОНЕЧНЫЙ РЕЖИМ <span>∞</span></button>
       <button id="campaign-restart" class="secondary">НАЧАТЬ КАМПАНИЮ ЗАНОВО <span>↻</span></button>
+      <button id="campaign-levels" class="text-btn">Выбрать уровень</button>
       <button id="campaign-menu" class="text-btn">В главное меню</button>
     </div>
   </section>
