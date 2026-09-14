@@ -431,6 +431,15 @@ def make_truck():
         cyl("FuelTank", (x*.96,.86,-1.2), .32, 1.3, M["chrome"], 10, rotation=(math.pi/2,0,0))
         cube("FuelCap", (x*.96,1.2,-1.2), (.12,.06,.12), M["yellow"], .03)
     cyl("Stack", (-1.12,2.0,-1.62), .1, 2.3, M["chrome"], 8)
+    # Водитель в кабине: в магазин уходит именно он, и кабина остаётся пустой.
+    cyl("DriverTorso", (-.5,1.75,-2.85), .22, .5, M["blue"], 8)
+    sphere("DriverHead", (-.5,2.12,-2.98), (.17,.19,.17), M["skin"])
+    cube("DriverHair", (-.5,2.26,-2.96), (.17,.06,.16), M["charcoal"], .04)
+    for x in (-.68,-.32):
+        cyl("DriverArm", (x,1.78,-3.22), .05, .38, M["skin"], 7, rotation=(math.pi/2,0,0))
+    bpy.ops.mesh.primitive_torus_add(major_radius=.2, minor_radius=.028, major_segments=10, minor_segments=5,
+                                    location=gltf_loc((-.5,1.8,-3.44)), rotation=gltf_rotation((math.pi/2,0,0)))
+    finish(bpy.context.object, "SteeringWheel", M["charcoal"])
     cube("Grille", (0,1.45,-3.98), (1.0,.4,.07), M["chrome"], .04)
     cube("FrontBumper", (0,.86,-4.02), (1.18,.26,.1), M["chrome"], .05)
     # Полуприцеп: глухой фургон с рёбрами жёсткости.
@@ -467,6 +476,13 @@ def make_bus():
     for z in (-1.75,-.4,.95,2.3):
         cyl("Passenger", (-.6,1.72,z), .19, .5, M["blue"], 7)
         sphere("PassengerHead", (-.6,2.14,z), (.15,.17,.15), M["skin"])
+    # Водитель автобуса: он тоже человек и тоже ходит за кофе.
+    cyl("DriverTorso", (-.62,1.72,-2.9), .2, .5, M["blue"], 8)
+    sphere("DriverHead", (-.62,2.12,-3.02), (.16,.18,.16), M["skin"])
+    cube("DriverHair", (-.62,2.25,-3.0), (.16,.055,.15), M["charcoal"], .035)
+    bpy.ops.mesh.primitive_torus_add(major_radius=.19, minor_radius=.026, major_segments=10, minor_segments=5,
+                                    location=gltf_loc((-.62,1.76,-3.24)), rotation=gltf_rotation((math.pi/2,0,0)))
+    finish(bpy.context.object, "SteeringWheel", M["charcoal"])
     # Дверь со стороны, с которой пассажиры и выходят.
     cube("DoorPanel", (1.26,1.55,-1.95), (.05,.78,.52), M["glass"], .02)
     cube("DoorFrame", (1.28,1.55,-1.95), (.04,.84,.58), M["charcoal"], .02)

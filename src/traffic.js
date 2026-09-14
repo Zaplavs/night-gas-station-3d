@@ -3,7 +3,12 @@ import * as THREE from 'three';
 /* Движение по трассе. Машины приезжают издалека по своей полосе, сворачивают
    на площадку, сдают назад от колонки и уезжают обратно по дороге. */
 
-export const ROAD={center:-17,near:-14.9,far:-19.1,edge:58,y:-.05};
+export const ROAD={center:-21.5,near:-19.4,far:-23.6,edge:58,y:-.05};
+/* Коридор, по которому уезжают: своя полоса между площадкой и трассой. */
+export const EXIT_LANE=-16.6;
+/* Разворот от колонки: короткий, чтобы корма не доставала до подъездной полосы. */
+export const REVERSE_REACH=3.6;
+const REVERSE_DEPTH=3.1;
 export const laneFor=dir=>dir>0?ROAD.near:ROAD.far; // правостороннее движение
 export const SERVICE_QUEUE={headX:14,headZ:-12,gap:1.35};
 
@@ -36,7 +41,7 @@ export function queuePoint(offset=0){
 export function queueEntryPath(target){
   const lane=ROAD.far,turn=Math.min(46,Math.max(29,target.x+11));
   return path([
-    [ROAD.edge,lane],[turn+9,lane],[turn,-18.1],[turn-5,-15.8],
+    [ROAD.edge,lane],[turn+9,lane],[turn,lane+1.1],[turn-5,(lane+target.z)/2],[turn-10,target.z-2.4],
     [target.x+4.2,target.z-1.2],[target.x,target.z]
   ]);
 }
@@ -52,9 +57,9 @@ export function queueToPumpPath(position,slotX,slotZ){
   const side=Math.sign(slotX)||1,outerX=slotX+side*3.2,stagingX=side>0?10:2;
   return path([
     [position.x,position.z],
-    [10,slotZ-5.6],
-    [stagingX,slotZ-6.25],
-    [outerX,slotZ-5.9],
+    [10,slotZ-6.4],
+    [stagingX,slotZ-6.7],
+    [outerX,slotZ-6.5],
     [outerX,slotZ-3.2],
     [slotX+side*.7,slotZ-2.15],
     [slotX,slotZ-1.3],
@@ -64,20 +69,20 @@ export function queueToPumpPath(position,slotX,slotZ){
 }
 
 /* Задний ход от колонки: корма уходит в сторону, нос разворачивается к выезду. */
-export function reversePath(slotX,slotZ,side,reach=4.6){
-  const k=reach/4.6;
+export function reversePath(slotX,slotZ,side,reach=REVERSE_REACH){
+  const k=reach/REVERSE_REACH;
   return path([
-    [slotX,slotZ],[slotX+side*.6*k,slotZ-1.6*k],[slotX+side*2.2*k,slotZ-3*k],
-    [slotX+side*3.8*k,slotZ-3.8*k],[slotX+side*reach,slotZ-3.95*k]
+    [slotX,slotZ],[slotX+side*.5*k,slotZ-1.25*k],[slotX+side*1.7*k,slotZ-2.35*k],
+    [slotX+side*2.95*k,slotZ-2.95*k],[slotX+side*reach,slotZ-REVERSE_DEPTH*k]
   ],{reverse:true});
 }
 
 /* Выезд: через площадку к дороге и дальше по своей полосе за горизонт. */
-export function exitPath(slotX,slotZ,side,reach=4.6){
-  const away=-side,lane=laneFor(away),z=slotZ-3.95*(reach/4.6),start=slotX+side*reach;
+export function exitPath(slotX,slotZ,side,reach=REVERSE_REACH){
+  const away=-side,lane=laneFor(away),z=slotZ-REVERSE_DEPTH*(reach/REVERSE_REACH),start=slotX+side*reach;
   return path([
-    [start,z],[start+away*2,z-.15],[start+away*5,z-.7],[start+away*9,-13.4],
-    [start+away*14,lane+(lane<-17?2.2:.4)],[start+away*21,lane],[start+away*36,lane],[away*ROAD.edge,lane]
+    [start,z],[start+away*2.2,z-2.1],[start+away*6,EXIT_LANE],[start+away*13,EXIT_LANE],
+    [start+away*22,lane+(lane<ROAD.center?2.2:.6)],[start+away*32,lane],[start+away*46,lane],[away*ROAD.edge,lane]
   ],{stop:false});
 }
 

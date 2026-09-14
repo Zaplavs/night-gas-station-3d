@@ -117,7 +117,9 @@ const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
   }
   g.pumps.forEach(p=>{p.car=null});return out;});
 if(service.some(r=>!r.parked||!r.pickupReachable||!r.tookHose||!r.hoseShown||!r.fuelReachable||!r.fuelFlow||!r.flowStops||!r.fuelingSeen||!r.paid||!r.hoseReturned))throw new Error(`Two-step refuelling failed: ${JSON.stringify(service)}`);
-const onRoad=p=>Math.abs(p.x)>40&&p.z<-12.4&&p.z>-21.6;
+// Полосы задаёт traffic.js: тест проверяет, что машина уходит именно на них.
+const lanes=await page.evaluate(async()=>{const {ROAD}=await import('/src/traffic.js');return {near:ROAD.near,far:ROAD.far}});
+const onRoad=p=>Math.abs(p.x)>40&&p.z<lanes.near+2.5&&p.z>lanes.far-2.5;
 const road=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.carQueue=[];g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0],start=c.path.curve.getPointAt(0);
   for(let i=0;i<1400&&c.status!=='waiting';i++)g.updateCars(.05);
@@ -173,11 +175,12 @@ const fifoQueue=await page.evaluate(()=>{const g=window.__nightStation;
   const diagnostic={firstOverlap,thirdStatus:third.status,thirdPhase:third.phase,thirdBlockedBy:third.blockedByVehicle?.id||null,thirdAt:{x:third.group.position.x,z:third.group.position.z},firstStatus:first.status,firstPhase:first.phase,firstAt:{x:first.group.position.x,z:first.group.position.z}};
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.carQueue=[];g.pumps.forEach(p=>{p.car=null;p.closed=false;p.broken=false});return{twoPumpsOccupied:occupiedBefore,spawnedThird,waitsInQueue,noOverlapWhileQueued,assignedInOrder,parkedAfterRelease,noOverlapAtPump,diagnostic};});
 if(Object.entries(fifoQueue).some(([key,value])=>key!=='diagnostic'&&!value))throw new Error(`FIFO service queue failed: ${JSON.stringify(fifoQueue)}`);
-const mergeQueue=await page.evaluate(()=>{const g=window.__nightStation;
+const mergeQueue=await page.evaluate(async()=>{const g=window.__nightStation;
+  const {ROAD,REVERSE_REACH}=await import('/src/traffic.js');
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.jobs=g.jobs.filter(j=>j.hidden);g.pumps.forEach((p,i)=>{p.car=i?{}:null;p.broken=false});g.player.position.set(0,.26,-3);
   g.spawnCar();const c=g.cars[0];for(let i=0;i<1400&&c.status!=='waiting';i++)g.updateCars(.05);g.leaveCar(c);
   for(let i=0;i<500&&c.phase==='reversing';i++)g.updateCars(.05);
-  const away=-c.side,lane=away>0?-14.9:-19.1,start=c.slotX+c.side*4.6,mergeX=start+away*14;
+  const away=-c.side,lane=away>0?ROAD.near:ROAD.far,start=c.slotX+c.side*(c.reach||REVERSE_REACH),mergeX=start+away*22;
   const addTrafficAt=targetX=>{for(let tries=0;tries<12;tries++){g.trafficTimer=-1;g.updateTraffic(0);const t=g.traffic.at(-1);if(!t)return null;const z=t.path.curve.getPointAt(0).z;if(Math.abs(z-lane)>.2){g.despawn(t,g.traffic);continue}let best=0,error=Infinity;for(let i=0;i<=300;i++){const u=i/300,d=Math.abs(t.path.curve.getPointAt(u).x-targetX);if(d<error){error=d;best=u}}t.dist=t.path.len*best;t.t=best;t.path.curve.getPointAt(best,t.group.position);const tangent=t.path.curve.getTangentAt(best);t.group.rotation.y=Math.atan2(-tangent.x,-tangent.z);return t}return null};
   const convoy=[addTrafficAt(mergeX-away*4),addTrafficAt(mergeX-away*14)].filter(Boolean),before=convoy.map(t=>t.dist);
   g.updateCars(.05);const yielded=c.phase==='yielding'&&convoy.length===2;
@@ -249,13 +252,13 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===6&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
   return out;});
 if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
-const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();
+const van=await page.evaluate(async()=>{const g=window.__nightStation;const {ROAD}=await import('/src/traffic.js');g.eventVan();
   const start=g.specialVan.path.curve.getPointAt(0);
   for(let i=0;i<600&&g.specialVan.status==='entering';i++)g.updateCars(.05);
   const parked=g.specialVan.status==='waiting'&&!!g.jobs.find(j=>j.title==='Проверьте странный фургон');
   g.leaveSpecialVan();
   for(let i=0;i<900&&g.specialVan;i++)g.updateCars(.05);
-  return {fromRoad:Math.abs(start.x)>40&&start.z<-12.4&&start.z>-21.6,parked,gone:!g.specialVan};});
+  return {fromRoad:Math.abs(start.x)>40&&start.z<ROAD.near+2.5&&start.z>ROAD.far-2.5,parked,gone:!g.specialVan};});
 if(Object.values(van).some(v=>!v))throw new Error(`Mystery van routing failed: ${JSON.stringify(van)}`);
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffee';g.updateCarry()});
 const sky=await page.evaluate(()=>{const g=window.__nightStation,sky=g.sky,out={};
@@ -445,20 +448,23 @@ const levelMenuEndless=await page.evaluate(()=>{const g=window.__nightStation,ou
   out.backToCampaign=g.state.playMode==='campaign';
   return out;});
 if(Object.values(levelMenuEndless).some(v=>!v))throw new Error(`Level menu endless entry failed: ${JSON.stringify(levelMenuEndless)}`);
-const trafficJams=await page.evaluate(()=>{const g=window.__nightStation,out={};
+const trafficJams=await page.evaluate(async()=>{const g=window.__nightStation,out={};
+  const {ROAD,REVERSE_REACH}=await import('/src/traffic.js');
   g.setState({...g.state,shift:12,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
   g.pumps.forEach(p=>{p.car=null;p.broken=false;p.closed=false;p.departingCar=null});
   // Выезд ждёт только тех, кто действительно едет по его полосе.
   const leaver=(g.spawnCar(),g.cars.at(-1));leaver.side=-1;leaver.slotX=g.pumps[0].slotX;
-  leaver.group.position.set(-9.45,-.05,-11.35);
+  leaver.group.position.set(leaver.slotX-REVERSE_REACH,-.05,-10.5);
   const blocker=(g.spawnCar(),g.cars.at(-1));
   out.twoCars=!!leaver&&!!blocker&&leaver!==blocker;
-  blocker.group.position.set(0,-.05,-14.9);blocker.stall=0;blocker.blockedByVehicle=null;
+  // Помеха стоит ровно в точке вливания на ближней полосе — той, куда выезжает leaver.
+  const mergeX=leaver.slotX-REVERSE_REACH+22;
+  blocker.group.position.set(mergeX,-.05,ROAD.near);blocker.stall=0;blocker.blockedByVehicle=null;
   out.busyLaneHolds=!g.mergeClear(leaver);
   blocker.stall=30;out.stalledLaneIgnored=g.mergeClear(leaver);
   blocker.stall=0;blocker.blockedByVehicle=leaver;out.mutualWaitIgnored=g.mergeClear(leaver);
-  blocker.blockedByVehicle=null;blocker.group.position.set(40,-.05,-14.9);
+  blocker.blockedByVehicle=null;blocker.group.position.set(mergeX+40,-.05,ROAD.near);
   out.farLaneIgnored=g.mergeClear(leaver);
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
   // Голова очереди, застрявшая на въезде, не должна морозить всю очередь.
@@ -487,6 +493,17 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   for(let i=0;i<2200&&car.status!=='waiting';i++)g.updateCars(.05);
   out.parked=car.status==='waiting';
   out.customerSent=!!car.customer&&g.customers.length===1&&car.customer.state==='walkingIn';
+  // Уходит именно тот, кто сидел за рулём: салон остаётся пустым.
+  out.seatEmpties=car.seats.length>0&&car.seats[0].meshes.every(mesh=>!mesh.visible);
+  out.customerWearsTheSeat=car.customer.group.getObjectByName('Body')?.material.color.getHex()===car.seats[0].coat;
+  // Сквозь покупателя не проходят, но из него всегда можно выйти.
+  {const customer=car.customer,saved=customer.position.clone();
+   customer.position.set(1.2,.26,-1.6);
+   g.player.position.set(0,.26,-4);
+   out.customerBlocks=g.isBlocked(1.2,-1.6)&&g.isBlocked(1.55,-1.6);
+   g.player.position.set(1.2,.26,-1.6);
+   out.customerLetsOut=!g.isBlocked(1.55,-1.6);
+   customer.position.copy(saved);g.player.position.set(0,.26,-4)}
   out.fuelJobWaits=g.jobs.some(j=>j.car===car&&j.kind==='hose-pickup');
   out.walksIn=walk(1600,()=>g.customers[0]?.state==='waiting');
   const customer=g.customers[0];
@@ -509,6 +526,7 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   car.fueled=true;g.releaseCar(car);
   out.waitsForCustomer=car.status==='waiting';
   out.customerReturns=walk(1600,()=>g.customers.length===0)&&car.customerDone===true;
+  out.seatFilledAgain=car.seats[0].meshes.every(mesh=>mesh.visible);
   out.servedCounted=g.served===1;
   g.leaveCar(car);for(let i=0;i<60;i++)g.updateCars(.05);
   out.carLeaves=car.status==='leaving';

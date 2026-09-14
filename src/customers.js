@@ -5,13 +5,13 @@ import * as THREE from 'three';
    им не нужна, зато перед игроком они останавливаются, а не проходят насквозь. */
 
 const WALK_SPEED = 2.15, TURN_SPEED = 9, ARRIVE = .14, PLAYER_GAP = .8, PLAYER_WAIT = 1.6;
-const COATS = [0x2e6380, 0x8a5526, 0x4f555b, 0x315d3f, 0x7a2f38, 0x3c3f78, 0x6d6a4c];
+export const COATS = [0x2e6380, 0x8a5526, 0x4f555b, 0x315d3f, 0x7a2f38, 0x3c3f78, 0x6d6a4c];
 const CAPS = [0xc2411f, 0x1f6f7a, 0xd0a343, 0x3a3f45, 0x8f3b6b];
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 export class Customer {
-  constructor(model) {
+  constructor(model, coatColor = null) {
     this.group = model;
     this.legs = [];
     this.arms = [];
@@ -22,7 +22,7 @@ export class Customer {
     this.blockedTime = 0;
     this.facing = Math.PI;
     this.group.scale.setScalar(.92);
-    const coat = pick(COATS), cap = pick(CAPS);
+    const coat = coatColor ?? pick(COATS), cap = pick(CAPS);
     model.traverse((object) => {
       if (!object.isMesh) return;
       if (object.name === 'Body' || object.name === 'Arm') {

@@ -4,13 +4,13 @@ import './style.css';
 import { AudioSystem } from './audio.js';
 import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, gpState, bindAdPause } from './gamepush.js';
 import { HandView } from './hands.js';
-import { ROAD, SERVICE_QUEUE, laneFor, entryPath, reversePath, exitPath, passPath, queuePoint, queueEntryPath, queueAdvancePath, queueToPumpPath, addLights, drive, setPath } from './traffic.js';
+import { ROAD, SERVICE_QUEUE, REVERSE_REACH, laneFor, entryPath, reversePath, exitPath, passPath, queuePoint, queueEntryPath, queueAdvancePath, queueToPumpPath, addLights, drive, setPath } from './traffic.js';
 import { createSky, MOON_DIRECTION } from './sky.js';
 import { CAMPAIGN_SHIFT_COUNT, CHAPTERS, PLAY_MODE, WEATHER, HURRY_PATIENCE, HURRY_PAYOUT, getShiftConfig, isFinalCampaignShift, randomFromRange, getChapter, chapterLevels, nextLevel, isLevelUnlocked, goalLines, goalProgress, evaluateGoal, hardFailure, activeRush, dueScripted, weatherOf, featureTags } from './content/shifts.js';
 import { DEFAULT_PROGRESS, migrateProgress } from './content/progress.js';
 import { MENU, STOCKS, STOCK_IDS, MAX_STOCK, getMenuItem, shelfCount } from './content/menu.js';
 import { VEHICLES, VEHICLE_ASSETS, getVehicle, rollVehicle, queueOffsets } from './content/vehicles.js';
-import { Customer } from './customers.js';
+import { Customer, COATS } from './customers.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_COUNT, achievementStats, achievementProgress, getAchievement, newlyUnlocked } from './content/achievements.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -28,7 +28,7 @@ const PUMP_SPOTS=[-2.55,2.55,-6.6],TANKER_BAY=2;
 const PUMP_RECTS=PUMP_SPOTS.map(x=>[x-.73,x+.73,SLOT_Z-.75,SLOT_Z+.75]);
 const WORLD={minX:-14.2,maxX:9.2,minZ:-13.2,maxZ:6.2};
 const VEHICLE_STATE=Object.freeze({ENTERING:'entering',QUEUEING:'queueing',APPROACHING_PUMP:'approachingPump',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
-const PLAYER_RADIUS=.36,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12,STALL_LIMIT=6,QUEUE_STALL=10,YIELD_LIMIT=18;
+const PLAYER_RADIUS=.36,CUSTOMER_RADIUS=.34,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12,STALL_LIMIT=6,QUEUE_STALL=10,YIELD_LIMIT=18;
 const GROUND_Y=.26,UPPER_FLOOR_Y=3.68,EYE_HEIGHT=1.62,JUMP_SPEED=4.9,GRAVITY=16.5,RAIN_HEIGHT=15;
 const STAIR={minX:4.98,maxX:6.66,minZ:-2.38,maxZ:3.12},UPPER_LANDING={minX:4.16,maxX:7.1,minZ:2.54,maxZ:4.14},UPPER_ROOM={minX:-4.3,maxX:4.3,minZ:-2.16,maxZ:6.2};
 const MOP_SPOT=new THREE.Vector3(3.7,UPPER_FLOOR_Y+.01,-1.4),TOOL_SPOT=new THREE.Vector3(4.05,4.4,1.3),TOOL_BENCH_Y=4.66;
@@ -86,12 +86,12 @@ class NightStationGame{
     const forecourt=new THREE.Mesh(new THREE.PlaneGeometry(24,23),new THREE.MeshStandardMaterial({color:0x263239,roughness:.95}));forecourt.rotation.x=-Math.PI/2;forecourt.position.set(-2.5,.012,-5);forecourt.receiveShadow=true;this.scene.add(forecourt);
     // Трасса тянется дальше, чем видит туман: машины успевают выехать и уехать по дороге.
     const road=new THREE.Mesh(new THREE.PlaneGeometry(144,9),new THREE.MeshStandardMaterial({color:0x070b0e,roughness:.97}));road.rotation.x=-Math.PI/2;road.position.set(0,.02,ROAD.center);road.receiveShadow=true;this.scene.add(road);
-    const apron=new THREE.Mesh(new THREE.PlaneGeometry(27,5.4),new THREE.MeshStandardMaterial({color:0x1d272c,roughness:.96}));apron.rotation.x=-Math.PI/2;apron.position.set(-3,.026,-13.2);apron.receiveShadow=true;this.scene.add(apron);
+    const apron=new THREE.Mesh(new THREE.PlaneGeometry(27,9.4),new THREE.MeshStandardMaterial({color:0x1d272c,roughness:.96}));apron.rotation.x=-Math.PI/2;apron.position.set(-3,.026,-15.2);apron.receiveShadow=true;this.scene.add(apron);
     const queueApron=new THREE.Mesh(new THREE.PlaneGeometry(16,4.2),apron.material);queueApron.rotation.x=-Math.PI/2;queueApron.position.set(14,.027,-12.5);queueApron.receiveShadow=true;this.scene.add(queueApron);
     const stripeMat=new THREE.MeshBasicMaterial({color:0xb7a55f}),edgeMat=new THREE.MeshBasicMaterial({color:0x6d7472}),postMat=new THREE.MeshStandardMaterial({color:0xdad3bc,roughness:.9}),reflectMat=new THREE.MeshBasicMaterial({color:0xff7a2f});
     for(let x=-66;x<67;x+=6){const s=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.13),stripeMat);s.rotation.x=-Math.PI/2;s.position.set(x,.035,ROAD.center);this.scene.add(s)}
-    for(let x=-66;x<67;x+=8){const e=new THREE.Mesh(new THREE.PlaneGeometry(7.4,.1),edgeMat);e.rotation.x=-Math.PI/2;e.position.set(x,.034,-21.2);this.scene.add(e)}
-    for(let x=-60;x<61;x+=10){const p=new THREE.Mesh(new THREE.BoxGeometry(.1,1,.1),postMat);p.position.set(x,.5,-21.9);this.scene.add(p);const r=new THREE.Mesh(new THREE.PlaneGeometry(.09,.16),reflectMat);r.position.set(x,.8,-21.84);this.scene.add(r)}
+    for(let x=-66;x<67;x+=8){const e=new THREE.Mesh(new THREE.PlaneGeometry(7.4,.1),edgeMat);e.rotation.x=-Math.PI/2;e.position.set(x,.034,ROAD.center-4.2);this.scene.add(e)}
+    for(let x=-60;x<61;x+=10){const p=new THREE.Mesh(new THREE.BoxGeometry(.1,1,.1),postMat);p.position.set(x,.5,ROAD.center-4.9);this.scene.add(p);const r=new THREE.Mesh(new THREE.PlaneGeometry(.09,.16),reflectMat);r.position.set(x,.8,ROAD.center-4.84);this.scene.add(r)}
     // Камни и сосны отодвинуты от левого крыла: там теперь работают, а не смотрят на лес.
     const offset=(side,near,far)=>side>0?near+Math.random()*far:-(near+5+Math.random()*far);
     const gravelMat=new THREE.MeshStandardMaterial({color:0x18201d,roughness:1});for(let i=0;i<24;i++){const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.12+Math.random()*.2,0),gravelMat);const side=Math.random()<.5?-1:1;rock.position.set(offset(side,10,15),.13,-5+Math.random()*23);rock.scale.y=.45;this.scene.add(rock)}
@@ -321,6 +321,15 @@ class NightStationGame{
       [-3.12,3.12,.42,1.9],[-2.96,-.04,5.55,6.42],[.04,2.96,5.55,6.42],[-4.5,-3.4,3.45,5.45],[3.5,4.55,3.45,5.45],[3.16,4.08,5.62,6.38],...PUMP_RECTS];if(fixed.some(a=>hitRect(...a)))return true;
     if(this.doorGlass.some(door=>hitRect(door.position.x-.6,door.position.x+.6,-2.74,-2.58)))return true;
     const circles=[[-6.6,-5.2,.3],[-4.05,-1.75,.45],[4.05,-2.05,.52],[-6.6,-8.52,.24],[-11.5,-3.7,.17],[-8.9,-3.7,.17],[-11.5,-2.4,.15]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
+    // Покупатель — такое же препятствие, как ящик; но если игрок уже стоит в нём,
+    // выход остаётся открытым, иначе двое застрянут друг в друге.
+    const self=this.player?.position;
+    for(const customer of this.customers){
+      const cx=customer.position.x,cz=customer.position.z;
+      if(Math.hypot(x-cx,z-cz)>=r+CUSTOMER_RADIUS)continue;
+      if(self&&Math.hypot(self.x-cx,self.z-cz)<r+CUSTOMER_RADIUS)continue;
+      return true
+    }
     for(const c of this.cars){if(c!==ignoreVehicle&&this.pointInVehicle(x,z,c,PLAYER_RADIUS))return true}for(const v of this.specialVehicles()){if(v!==ignoreVehicle&&this.pointInVehicle(x,z,v,PLAYER_RADIUS))return true}return false
   }
   pointInVehicle(x,z,vehicle,margin=0,position=vehicle.group.position,rotationY=vehicle.group.rotation.y){
@@ -357,7 +366,7 @@ class NightStationGame{
   /* Выезд ждёт поток, но не тех, кто сам стоит из-за нас: подъезд к дальнему посту
      идёт по той же кромке площадки, и без этого выезд с подъездом запирают друг друга. */
   mergeClear(vehicle){
-    const away=-vehicle.side,lane=laneFor(away),start=vehicle.slotX+vehicle.side*4.6,mergeX=start+away*14;
+    const away=-vehicle.side,lane=laneFor(away),start=vehicle.slotX+vehicle.side*(vehicle.reach||REVERSE_REACH),mergeX=start+away*22;
     return !this.activeVehicles().some(other=>{
       if(other===vehicle||other.blockedByVehicle===vehicle||(other.stall||0)>STALL_LIMIT)return false;
       const p=other.group.position;
@@ -381,7 +390,7 @@ class NightStationGame{
     // Через несколько секунд ожидания замершая машина перестаёт считаться потоком:
     // разъехаться впритирку лучше, чем простоять до рассвета. Припаркованные и стоящие
     // в очереди сюда не попадают — сквозь них не ездят.
-    const deadlocked=other=>(vehicle.stall||0)>STALL_LIMIT&&(other.speed||0)<.12&&other.phase!=='queued'&&other.phase!=='parked';
+    const deadlocked=other=>(vehicle.stall||0)>STALL_LIMIT&&(other.speed||0)<.12&&!['queued','parked','yielding'].includes(other.phase);
     if(previousBlocker&&this.activeVehicles().includes(previousBlocker)&&this.shouldYield(vehicle,previousBlocker)&&!deadlocked(previousBlocker)&&this.vehiclesOverlap(vehicle,vehicle.group.position,vehicle.group.rotation.y,previousBlocker,VEHICLE_MARGIN+.36)){vehicle.blockedByVehicle=previousBlocker;return false}
     const other=this.activeVehicles().find(v=>v!==vehicle&&this.shouldYield(vehicle,v)&&!deadlocked(v)&&(this.vehiclesOverlap(vehicle,step.position,step.rotationY,v)||this.vehiclesOverlap(vehicle,mid,vehicle.group.rotation.y+turn/2,v)));
     if(other){vehicle.blockedByVehicle=other;return false}return true
@@ -467,13 +476,37 @@ class NightStationGame{
     if(!type.note||this.notedTypes.has(type.id))return;
     this.notedTypes.add(type.id);this.toast(type.note)
   }
+  /* Кто сидит внутри: водитель — одно место, ряды пассажиров автобуса — по одному.
+     Ушедший в магазин исчезает из салона и возвращается на своё место. */
+  collectSeats(group){
+    const driver=[],rows=new Map();
+    group.traverse(object=>{
+      if(!object.isMesh)return;
+      if(object.name.startsWith('Driver'))driver.push(object);
+      else if(object.name.startsWith('Passenger')){
+        const row=Math.round(object.position.z*10);
+        if(!rows.has(row))rows.set(row,[]);
+        rows.get(row).push(object);
+      }
+    });
+    const rowSeats=[...rows.values()];
+    if(driver.length)rowSeats.unshift(driver);
+    return rowSeats.map(meshes=>{
+      const coat=COATS[Math.floor(Math.random()*COATS.length)];
+      for(const mesh of meshes){
+        if(!mesh.name.endsWith('Torso'))continue;
+        mesh.material=mesh.material.clone();mesh.material.userData.owned=true;mesh.material.color.setHex(coat);
+      }
+      return {meshes,coat}
+    })
+  }
   /* Общая сборка клиента: тип задаёт габариты, свет, терпение и звук мотора. */
   makeVehicle(type,group,extra={}){
     const hurry=!type.big&&Math.random()<(this.shiftConfig.hurryChance||0);
     this.paintCar(group,hurry,type);this.scene.add(group);
     const vehicle={id:++this.vehicleId,type,group,pump:null,t:0,lights:addLights(group,type.lights),
-      halfWidth:type.halfWidth,halfLength:type.halfLength,reach:4.6+Math.max(0,type.halfLength-2.2)*.95,
-      spot:null,safeZone:null,customers:[],slotX:null,hurry,
+      halfWidth:type.halfWidth,halfLength:type.halfLength,reach:REVERSE_REACH+Math.max(0,type.halfLength-2.2)*.95,
+      spot:null,safeZone:null,customers:[],seats:this.collectSeats(group),slotX:null,hurry,
       patience:Math.round(this.shiftConfig.customerPatience*type.patience*(hurry?HURRY_PATIENCE:1)),...extra};
     vehicle.canAdvance=step=>this.canVehicleAdvance(vehicle,step);
     return vehicle
@@ -540,6 +573,9 @@ class NightStationGame{
   /* Обслуживают по очереди. Исключение одно: если голова надолго застряла в заторе
      на въезде, вся очередь не должна вставать вместе с ней. */
   dispatchQueuedCars(){
+    // Пока кто-то отъезжает от колонки задним ходом, новую машину не зовут:
+    // разворот занимает ту же полосу, по которой она поедет к посту.
+    if(this.cars.some(car=>car.phase==='reversing'))return false;
     let assigned=false;
     while(this.carQueue.length){
       const index=this.carQueue.findIndex((car,at)=>car.status===VEHICLE_STATE.QUEUEING&&car.phase==='queued'
@@ -576,12 +612,14 @@ class NightStationGame{
   freeCounterSlot(){const taken=new Set(this.customers.map(customer=>customer.slot));return COUNTER_SLOTS.findIndex((_,index)=>!taken.has(index))}
   sendCustomer(car,itemId,seat=0){
     const slot=this.freeCounterSlot();if(slot<0||!this.assets.worker||!getMenuItem(itemId))return null;
-    const customer=new Customer(this.assets.worker.clone(true)),side=car.side||1;
+    const seatTaken=car.seats?.[seat]||null;
+    const customer=new Customer(this.assets.worker.clone(true),seatTaken?.coat??null),side=car.side||1;
     const start=new THREE.Vector3(car.group.position.x+side*1.5,GROUND_Y,car.group.position.z+.6+seat*.95);
     customer.baseY=GROUND_Y;customer.group.position.copy(start);
     customer.slot=slot;customer.car=car;customer.order=itemId;customer.state='walkingIn';
     customer.route=[new THREE.Vector3(start.x,GROUND_Y,SLOT_Z+2.9),DOOR_OUTSIDE.clone(),DOOR_INSIDE.clone(),COUNTER_SLOTS[slot].clone()];
     customer.setPath(customer.route);
+    customer.seat=seatTaken;seatTaken?.meshes.forEach(mesh=>mesh.visible=false);
     this.scene.add(customer.group);this.customers.push(customer);(car.customers??=[]).push(customer);car.customer=customer;
     return customer;
   }
@@ -632,6 +670,7 @@ class NightStationGame{
   }
   despawnCustomer(customer){
     const index=this.customers.indexOf(customer);if(index>=0)this.customers.splice(index,1);
+    customer.seat?.meshes.forEach(mesh=>mesh.visible=true);
     this.jobs.filter(job=>job.customer===customer).forEach(job=>this.removeJob(job));
     customer.dispose(this.scene);
     const car=customer.car;if(!car)return;
@@ -642,7 +681,7 @@ class NightStationGame{
     if(car.type?.id==='bus'&&car.customers?.length>=3&&car.customers.every(other=>other.served))this.track('busLoads');
     if(car.leaveWhenReady)this.leaveCar(car);else this.releaseCar(car);
   }
-  clearCustomers(){for(const customer of this.customers)customer.dispose(this.scene);this.customers=[]}
+  clearCustomers(){for(const customer of this.customers){customer.seat?.meshes.forEach(mesh=>mesh.visible=true);customer.dispose(this.scene)}this.customers=[]}
   /* Машина уезжает, когда бак полон и её покупатель вернулся из магазина. */
   releaseCar(car){
     if(!car||car.status===VEHICLE_STATE.LEAVING||!car.fueled)return;
