@@ -31,6 +31,8 @@ const WORLD={minX:-14.2,maxX:9.2,minZ:-13.2,maxZ:6.2};
 const VEHICLE_STATE=Object.freeze({ENTERING:'entering',QUEUEING:'queueing',APPROACHING_PUMP:'approachingPump',WAITING:'waiting',FUELING:'fueling',LEAVING:'leaving'});
 const PLAYER_RADIUS=.36,CUSTOMER_RADIUS=.34,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12,STALL_LIMIT=6,QUEUE_STALL=10,YIELD_LIMIT=18;
 const GROUND_Y=.26,UPPER_FLOOR_Y=3.68,EYE_HEIGHT=1.62,JUMP_SPEED=4.9,GRAVITY=16.5,RAIN_HEIGHT=15;
+// Последняя минута смены — это рассвет: небо светлеет, звёзды гаснут, горизонт разгорается.
+const DAWN_WINDOW=60,DAWN_FOG=new THREE.Color(0x56626f);
 const STAIR={minX:4.98,maxX:6.66,minZ:-2.38,maxZ:3.12},UPPER_LANDING={minX:4.16,maxX:7.1,minZ:2.54,maxZ:4.14},UPPER_ROOM={minX:-4.3,maxX:4.3,minZ:-2.16,maxZ:6.2};
 const CART_SPOT=new THREE.Vector3(0,.95,1.02);
 /* Выкупленное стоит в моделях с самого начала и просто прячется до покупки. */
@@ -68,7 +70,7 @@ const GUIDE_SLIDES=[
   ['Кто приехал','Ночью приезжают не только легковые. Мотоцикл заправляется за пару секунд, но и ждать почти не станет — денег с него мало. Фура стоит у колонки дольше всех и платит вдвое: ей нужен третий пост слева, между колонками под навесом ей не развернуться. Автобус привозит в магазин сразу три заказа и не уедет, пока не обслужат последнего.','tutorial/08-vehicles.png'],
   ['Склад наверху','Всё, чем торгует прилавок, и весь инвентарь лежат на складе второго этажа: выйдите на улицу, поднимитесь по лестнице справа от магазина, и дверь откроется сама. У каждого стеллажа своя лента — кофе, еда, хот-доги, газировка. У самой двери стоят верстак с инструментом и швабра с ведром. Коробку можно взять заранее, пока нет очереди, а инструмент со шваброй — до того, как что-нибудь случится.','tutorial/07-stock.png'],
   ['Станция растёт','Ночная выручка остаётся на станции. В меню и на экране итогов есть раздел «СТАНЦИЯ»: там за деньги выкупаются вторая кофемашина, прожекторы над площадкой, щит на трассе, скоростные насосы, третий пост навсегда и тележка для коробок. Покупка одна и навсегда — её видно на площадке и слышно по работе, а работать лучше, чем «на зачёт», становится выгодно.','tutorial/09-station.png'],
-  ['Цель ночи','У каждого уровня своя цель: обслужить столько-то машин, заработать сумму, удержать репутацию или не упустить клиентов. Прогресс виден в панели дел слева. Если цель не выполнена, уровень можно переиграть — деньги и улучшения остаются.','tutorial/05-goal.png'],
+  ['Цель ночи','У каждого уровня своя цель: обслужить столько-то машин, заработать сумму, удержать репутацию или не упустить клиентов. Прогресс виден в панели дел слева. За минуту до конца небо начинает светлеть, а звёзды гаснут — сколько осталось, видно и без часов. Если цель не выполнена, уровень можно переиграть: деньги и выкупленное на станции остаются.','tutorial/05-goal.png'],
   ['Ночные происшествия','При отключении света вся заправка остановится: поднимитесь на склад за инструментом и почините щиток у левой стены магазина. Входные двери аварийно останутся открыты. Пролитый кофе закрывает прилавок: пока пол липкий, заказы не готовят и не выдают, так что за шваброй придётся идти сразу. Жёлтый ящик «НАХОДКИ» стоит справа от входа.','tutorial/04-events.png']
 ];
 
@@ -77,7 +79,7 @@ class NightStationGame{
     this.canvas=$('#scene');this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x091820);this.scene.fog=new THREE.FogExp2(0x091820,.022);
     this.camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.08,120);this.camera.position.set(0,1.65,-2.8);this.camera.rotation.order='YXZ';
     this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));this.renderer.setSize(innerWidth,innerHeight);this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.28;
-    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.carQueue=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftConfig=getShiftConfig(1);this.shiftLength=this.shiftConfig.duration;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock={coffee:MAX_STOCK,snack:MAX_STOCK,hotdog:MAX_STOCK,soda:MAX_STOCK};this.fuelMax=null;this.fuelLeft=Infinity;this.fuelWarned=false;this.weather=WEATHER.clear.id;this.baseHemi=1.85;this.carry=null;this.fuelHose=null;this.served=0;this.lost=0;this.shiftStartMoney=0;this.shiftEarned=0;this.scriptedFired=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.closedSigns=[];this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.tanker=null;this.bayHeld=null;this.bayReservedAt=0;this.draining=false;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.upperDoorOpen=0;this.upperDoorParts=[];this.stockVisuals={coffee:[],snack:[],hotdog:[],soda:[]};this.shelfVisuals={coffee:[],snack:[],soda:[],hotdog:[]};this.customers=[];this.notedTypes=new Set();this.upgradeVisuals={};this.floodLights=[];this.powerVisuals=[];this.markerBaseY=.12;this.state=migrateProgress(DEFAULT_PROGRESS);
+    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.carQueue=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftConfig=getShiftConfig(1);this.shiftLength=this.shiftConfig.duration;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock={coffee:MAX_STOCK,snack:MAX_STOCK,hotdog:MAX_STOCK,soda:MAX_STOCK};this.fuelMax=null;this.fuelLeft=Infinity;this.fuelWarned=false;this.weather=WEATHER.clear.id;this.baseHemi=1.85;this.dawn=0;this.nightFog=new THREE.Color(0x091820);this.nightDensity=.022;this.carry=null;this.fuelHose=null;this.served=0;this.lost=0;this.shiftStartMoney=0;this.shiftEarned=0;this.scriptedFired=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.closedSigns=[];this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.tanker=null;this.bayHeld=null;this.bayReservedAt=0;this.draining=false;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.upperDoorOpen=0;this.upperDoorParts=[];this.stockVisuals={coffee:[],snack:[],hotdog:[],soda:[]};this.shelfVisuals={coffee:[],snack:[],soda:[],hotdog:[]};this.customers=[];this.notedTypes=new Set();this.upgradeVisuals={};this.floodLights=[];this.powerVisuals=[];this.markerBaseY=.12;this.state=migrateProgress(DEFAULT_PROGRESS);
     this.audio=audio;this.hands=new HandView();this.moving=false;this.lastYaw=0;this.lastPitch=0;this.grounded=true;this.jumpHeight=0;this.jumpSpeed=0;this.landDip=0;
     this.setupWorld();this.setupInput();this.setupUI();window.addEventListener('resize',()=>this.resize());document.addEventListener('visibilitychange',()=>this.visibility());
   }
@@ -147,12 +149,14 @@ class NightStationGame{
   applyWeather(kind){
     const weather=WEATHER[kind]||WEATHER.clear;this.weather=weather.id;
     const density={clear:.022,rain:.031,fog:.055}[weather.id],tint=weather.id==='fog'?0x101f26:0x091820;
+    this.nightFog.setHex(tint);this.nightDensity=density;
     this.scene.fog.density=density;this.scene.fog.color.setHex(tint);this.scene.background.setHex(tint);
     this.baseHemi=(weather.id==='fog'?2.15:weather.id==='rain'?1.6:1.85)+(this.has('floodlights')?.38:0);
     this.hemi.intensity=this.blackout?.45:this.baseHemi;
     this.rain.points.visible=weather.id==='rain';
     this.groundMats.forEach(material=>{material.roughness=weather.id==='rain'?.38:.95});
     this.sky.group.visible=weather.id!=='fog';
+    this.applyDawn(this.dawn);
   }
   createLandmarkLabel(text,color,position,width=2,fontSize=43){
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='rgba(5,13,17,.92)';ctx.fillRect(8,12,496,104);ctx.strokeStyle=color;ctx.lineWidth=8;ctx.strokeRect(8,12,496,104);ctx.fillStyle='#f7f3df';ctx.font=`900 ${fontSize}px Montserrat, Arial`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,66);
@@ -249,11 +253,11 @@ class NightStationGame{
     ui.stationGrid.onclick=event=>{const card=event.target.closest('[data-upgrade]');if(card)this.buyUpgrade(card.dataset.upgrade)};
   }
   setState(data){if(!data)return;this.state=migrateProgress(data);this.checkAchievements(true);this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
-  showMenu(){this.mode='menu';this.applyWeather('clear');document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
+  showMenu(){this.mode='menu';this.dawn=0;this.applyWeather('clear');document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
   prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(this.state.playMode===PLAY_MODE.CAMPAIGN)this.state.shift=nextLevel(this.state.levelsCleared);if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
     this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;
-    this.clearShift();this.applyUpgradeVisuals();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.lost=0;this.scriptedFired.clear();this.notedTypes=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.applyLevelSetup();this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.upperDoorOpen=0;this.applyDoorOpen();this.applyUpperDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,GROUND_Y,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');this.announceLevel();this.updateHud();saveProgress(this.state);this.lockPointer()
+    this.clearShift();this.applyDawn(0);this.applyUpgradeVisuals();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.lost=0;this.scriptedFired.clear();this.notedTypes=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.applyLevelSetup();this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.upperDoorOpen=0;this.applyDoorOpen();this.applyUpperDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,GROUND_Y,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');this.announceLevel();this.updateHud();saveProgress(this.state);this.lockPointer()
   }
   clearShift(){this.returnFuelHose();for(const c of [...this.cars])this.despawn(c);this.cars=[];this.carQueue=[];for(const t of [...this.traffic])this.despawn(t);this.traffic=[];for(const j of this.jobs)if(j.visual)this.scene.remove(j.visual);this.jobs=[];this.pumps.forEach(p=>{p.car=null;p.departingCar=null;p.broken=false;p.reserved=false});if(this.specialVan){this.despawn(this.specialVan);this.specialVan=null}if(this.tanker){this.despawn(this.tanker);this.tanker=null}this.clearCustomers();this.bayHeld=null;this.draining=false;this.carry=null;this.blackoutCarry=null;this.kitMop?.forEach(m=>m.visible=true);this.updateCarry()}
   update(dt){
@@ -272,6 +276,8 @@ class NightStationGame{
   closeGuide(){ui.guide.classList.add('hidden');if(!this.resumeAfterGuide)return;this.resumeAfterGuide=false;this.mode='playing';audio.pause(false);ui.mobile.classList.toggle('hidden',!isTouch);ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);this.lockPointer();this.clock.getDelta()}
   updatePlay(dt){
     this.elapsed+=dt;if(this.elapsed>=this.shiftLength||this.levelResult&&!this.levelResult.passed){this.finishShift();return}
+    const left=this.shiftLength-this.elapsed,dawn=left>=DAWN_WINDOW?0:1-Math.max(0,left)/DAWN_WINDOW;
+    if(dawn!==this.dawn)this.applyDawn(dawn);
     this.updateSchedule();
     if(!this.blackout){
       this.spawnTimer-=dt;this.eventTimer-=dt;
@@ -1063,6 +1069,17 @@ class NightStationGame{
   }
   /* ─────────── Уровень: подготовка, брифинг, расписание, цель ─────────── */
   queueLimit(){return this.shiftConfig.queueSize+(this.currentRush?this.currentRush.queueBoost:0)}
+  /* Рассвет: одно число от 0 до 1 красит небо, туман, фон и общий свет.
+     Ноль — обычная ночь, единица — момент, когда смена закрывается. */
+  applyDawn(progress){
+    this.dawn=Math.max(0,Math.min(1,progress||0));
+    this.sky.setDawn(this.dawn);
+    const eased=this.dawn*this.dawn*(3-2*this.dawn);
+    const tint=this.nightFog.clone().lerp(DAWN_FOG,eased*.85);
+    this.scene.fog.color.copy(tint);this.scene.background.copy(tint);
+    this.scene.fog.density=this.nightDensity*(1-eased*.4);
+    if(!this.blackout)this.hemi.intensity=this.baseHemi+eased*.8;
+  }
   /* Ночь по данным уровня плюс то, что выкуплено: третий пост, свет, щит. */
   shiftFor(number){return applyUpgradesToShift(getShiftConfig(number,this.state.playMode),this.state.upgrades)}
   /* Выкупленное видно на площадке, а не только в формулах. */

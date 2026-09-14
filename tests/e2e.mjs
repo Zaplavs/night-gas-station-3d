@@ -729,6 +729,45 @@ const nightWeather=await page.evaluate(()=>{const g=window.__nightStation,out={}
   g.showMenu();out.menuIsClear=g.weather==='clear'&&!g.rain.points.visible;
   return out;});
 if(Object.values(nightWeather).some(v=>!v))throw new Error(`Weather failed: ${JSON.stringify(nightWeather)}`);
+const dawnSky=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  g.setState({...g.state,shift:5,levelsCleared:4,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  const stars=g.sky.starLayers,glow=g.sky.dawnParts;
+  const nightFog=g.scene.fog.color.getHex(),nightDensity=g.scene.fog.density,nightHemi=g.hemi.intensity;
+  const nightStars=stars.map(layer=>layer.material.opacity);
+  out.startsAtNight=g.dawn===0&&g.sky.dawn===0&&nightStars.every(value=>value>.3);
+  out.horizonDarkAtNight=glow.every(sprite=>!sprite.visible||sprite.material.opacity<.001);
+  // Середина смены — всё ещё ночь: небо не меняется само по себе.
+  g.elapsed=g.shiftLength-90;g.updatePlay(.05);
+  out.middleIsNight=g.dawn===0&&g.scene.fog.color.getHex()===nightFog&&g.scene.fog.density===nightDensity;
+  // Последняя минута: рассвет считается от остатка времени.
+  g.elapsed=g.shiftLength-30;g.updatePlay(.05);
+  out.dawnStarts=g.dawn>.45&&g.dawn<.55&&Math.abs(g.sky.dawn-g.dawn)<1e-9;
+  out.starsDim=stars.every((layer,i)=>layer.material.opacity<nightStars[i]);
+  out.horizonWarms=glow[0].visible&&glow[0].material.opacity>0;
+  // Момент закрытия смены: звёзды погасли, горизонт горит, ночь отступила.
+  g.elapsed=g.shiftLength-.1;g.updatePlay(.05);
+  out.fullDawn=g.dawn>.99;
+  out.starsOut=stars.every(layer=>layer.material.opacity<.02);
+  out.moonPales=g.sky.group.children.some(child=>child.isGroup&&child.children.some(part=>part.isMesh&&part.material.opacity<.4));
+  out.horizonBurns=glow.every(sprite=>sprite.visible&&sprite.material.opacity>.05);
+  out.skyLightens=g.scene.fog.color.getHex()!==nightFog&&g.scene.fog.density<nightDensity&&g.hemi.intensity>nightHemi+.5;
+  // Следующая смена начинается снова ночью.
+  g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  out.nextNightResets=g.dawn===0&&g.sky.dawn===0&&g.scene.fog.color.getHex()===nightFog
+    &&Math.abs(g.scene.fog.density-nightDensity)<1e-9&&Math.abs(g.hemi.intensity-nightHemi)<1e-9
+    &&stars.every((layer,i)=>Math.abs(layer.material.opacity-nightStars[i])<.2);
+  // Темнота сильнее рассвета: щиток гасит свет в любое время суток.
+  g.elapsed=g.shiftLength-10;g.updatePlay(.05);
+  const dawnHemi=g.hemi.intensity;
+  g.eventBlackout();
+  out.blackoutStillDark=g.hemi.intensity<dawnHemi;
+  g.setBlackout(false);g.blackout=false;g.jobs=g.jobs.filter(j=>j.tag!=='blackout');
+  g.setState({...g.state,shift:1,levelsCleared:0});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  return out;});
+if(Object.values(dawnSky).some(v=>!v))throw new Error(`Dawn failed: ${JSON.stringify(dawnSky)}`);
 const levelTags=await page.evaluate(()=>{const g=window.__nightStation,out={};
   g.setState({...g.state,levelsCleared:30,campaignComplete:true});g.openLevels('menu');
   const tiles=[...document.querySelectorAll('.level-tile')];
@@ -1033,4 +1072,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, a dawn in the last minute, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();

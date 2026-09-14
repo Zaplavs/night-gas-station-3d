@@ -4,7 +4,10 @@ import * as THREE from 'three';
    Небо не ловит туман и едет вместе с камерой, поэтому кажется бесконечно далёким. */
 
 export const MOON_DIRECTION=new THREE.Vector3(-.42,.44,-.79).normalize();
+/* Заря приходит с противоположной луне стороны — вдоль трассы, справа от станции. */
+export const DAWN_DIRECTION=new THREE.Vector3(1,0,.22).normalize();
 const RADIUS=100;
+const clamp01=(value)=>Math.max(0,Math.min(1,value));
 
 /* Мягкая круглая точка: из неё сделаны и звёзды, и ореол вокруг луны. */
 function softSprite(){
@@ -32,6 +35,23 @@ const bandDirection=()=>new THREE.Vector3()
   .addScaledVector(BAND_NORMAL,gauss()*.085)
   .normalize();
 
+/* Полоса у горизонта: широкое тёплое пятно и яркое ядро под ним.
+   Оба спрайта смотрят на камеру, поэтому на любой ширине экрана это ровная заря. */
+function buildDawn(texture){
+  const group=new THREE.Group();
+  const place=(sprite,height,width,tall)=>{
+    sprite.position.copy(DAWN_DIRECTION).multiplyScalar(RADIUS);sprite.position.y=height;
+    sprite.scale.set(width,tall,1);sprite.material.opacity=0;sprite.visible=false;group.add(sprite);
+  };
+  const band=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,color:0xff9b52,transparent:true,opacity:0,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+  place(band,2,210,64);
+  const core=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,color:0xffd49a,transparent:true,opacity:0,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+  place(core,-1,86,30);
+  const spark=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,color:0xfff3d8,transparent:true,opacity:0,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+  place(spark,-3,30,14);
+  return {group,band,core,spark};
+}
+
 function starLayer(count,size,opacity,color,texture,fromBand=false){
   const positions=[];
   for(let i=0;i<count;i++){
@@ -43,6 +63,7 @@ function starLayer(count,size,opacity,color,texture,fromBand=false){
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   const material=new THREE.PointsMaterial({color,size,map:texture,transparent:true,opacity,depthWrite:false,fog:false,sizeAttenuation:true});
   const points=new THREE.Points(geometry,material);points.frustumCulled=false;
+  points.userData.baseOpacity=opacity;
   return points;
 }
 
@@ -50,9 +71,9 @@ function starLayer(count,size,opacity,color,texture,fromBand=false){
 function buildMoon(texture){
   const moon=new THREE.Group();
   moon.position.copy(MOON_DIRECTION).multiplyScalar(RADIUS);
-  const disc=new THREE.Mesh(new THREE.SphereGeometry(3.8,22,16),new THREE.MeshBasicMaterial({color:0xf6f5e8,fog:false}));
+  const disc=new THREE.Mesh(new THREE.SphereGeometry(3.8,22,16),new THREE.MeshBasicMaterial({color:0xf6f5e8,fog:false,transparent:true}));
   moon.add(disc);
-  const mareMat=new THREE.MeshBasicMaterial({color:0xdfe0d4,fog:false});
+  const mareMat=new THREE.MeshBasicMaterial({color:0xdfe0d4,fog:false,transparent:true});
   const toViewer=MOON_DIRECTION.clone().negate();
   for(const [ox,oy,r] of [[-1.05,.85,1.15],[.95,.2,.8],[-.15,-1.15,.62]]){
     const mare=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mareMat);
@@ -65,7 +86,7 @@ function buildMoon(texture){
   halo.scale.setScalar(14);moon.add(halo);
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,color:0x7ea6c4,transparent:true,opacity:.16,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
   glow.scale.setScalar(44);moon.add(glow);
-  return {moon,halo};
+  return {moon,halo,discMaterials:[disc.material,mareMat]};
 }
 
 export function createSky(){
@@ -76,7 +97,10 @@ export function createSky(){
   const mid=starLayer(240,.86,.95,0xe4f0f7,texture);
   const bright=starLayer(60,1.6,1,0xfffdf4,texture);
   group.add(dim,milkyWay,mid,bright);
-  const {moon,halo}=buildMoon(texture);group.add(moon);
+  const {moon,halo,discMaterials}=buildMoon(texture);group.add(moon);
+  const dawn=buildDawn(texture);group.add(dawn.group);
+  const layers=[dim,milkyWay,mid,bright];
+  let dawnProgress=0;
 
   /* Метеор: раз в полминуты-минуту короткая черта прочерчивает небо. */
   const meteor=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,color:0xdff0ff,transparent:true,opacity:0,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
@@ -87,13 +111,31 @@ export function createSky(){
   return {
     group,
     moonDirection:MOON_DIRECTION,
+    dawnDirection:DAWN_DIRECTION,
+    starLayers:layers,
+    dawnParts:[dawn.band,dawn.core,dawn.spark],
+    get dawn(){return dawnProgress},
+    /* К последней минуте смены звёзды гаснут, луна бледнеет, горизонт разгорается. */
+    setDawn(value){
+      dawnProgress=clamp01(value);
+      const fade=1-dawnProgress;
+      for(const layer of layers)layer.material.opacity=layer.userData.baseOpacity*fade;
+      for(const material of discMaterials)material.opacity=.25+fade*.75;
+      halo.material.opacity=.36*fade;
+      const glow=dawnProgress*dawnProgress;
+      dawn.band.material.opacity=.5*glow;dawn.band.visible=glow>.001;
+      dawn.core.material.opacity=.42*glow;dawn.core.visible=glow>.001;
+      dawn.spark.material.opacity=.6*Math.max(0,dawnProgress-.55)/.45;dawn.spark.visible=dawnProgress>.55;
+    },
     update(dt,cameraPosition){
       group.position.copy(cameraPosition);
       group.rotation.y+=dt*.0008; // очень медленный ход звёзд за смену
-      const t=performance.now()*.001;
-      mid.material.opacity=.72+Math.sin(t*1.7)*.08;
-      bright.material.opacity=.9+Math.sin(t*2.6+1.1)*.1;
-      halo.material.opacity=.36+Math.sin(t*.8)*.035;
+      const t=performance.now()*.001,fade=1-dawnProgress;
+      mid.material.opacity=(.72+Math.sin(t*1.7)*.08)*fade;
+      bright.material.opacity=(.9+Math.sin(t*2.6+1.1)*.1)*fade;
+      halo.material.opacity=(.36+Math.sin(t*.8)*.035)*fade;
+      dim.material.opacity=dim.userData.baseOpacity*fade;
+      milkyWay.material.opacity=milkyWay.userData.baseOpacity*fade;
       if(meteor.visible){
         meteorTime+=dt;
         const p=meteorTime/1.1;
@@ -104,7 +146,7 @@ export function createSky(){
           meteor.material.rotation=meteor.userData.tilt;
           meteor.scale.set(9,.42,1);
         }
-      }else if((meteorTimer-=dt)<=0){
+      }else if((meteorTimer-=dt)<=0&&dawnProgress<.25){
         meteorTimer=26+Math.random()*44;meteorTime=0;
         const start=domeDirection(),drift=domeDirection();
         meteorFrom.copy(start).multiplyScalar(RADIUS);
