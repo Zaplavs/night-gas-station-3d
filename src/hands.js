@@ -187,7 +187,7 @@ export class HandView{
     this.sway=new THREE.Vector2();this.swayTo=new THREE.Vector2();this.aspect=0;
   }
   build(assets){
-    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),hotdog:hotdog(),soda:soda(),sodaBox:crate(0x69c96f,'soda-stock'),bag:lostBag(assets&&assets.bag)};
+    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),hotdog:hotdog(),soda:soda(),hotdogBox:crate(0xc8402c,'hotdog-stock'),sodaBox:crate(0x69c96f,'soda-stock'),bag:lostBag(assets&&assets.bag)};
     for(const [name,group] of Object.entries(made)){group.visible=false;this.items[name]=group;this.rig.add(group)}
   }
   set(name){

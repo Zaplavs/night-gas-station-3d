@@ -59,6 +59,7 @@ M = {
     "black": mat("Rubber", (0.012, 0.014, 0.016)),
     "chrome": mat("Metal", (0.22, 0.25, 0.27), metallic=0.8, roughness=0.3),
     "purple": mat("Mystic violet", (0.25, 0.035, 0.36), emission=(0.18, 0.0, 0.35)),
+    "lime": mat("Fresh green", (0.16, 0.62, 0.3), emission=(0.03, 0.2, 0.08)),
 }
 
 
@@ -198,7 +199,7 @@ def make_station():
         cube("GrillSausage", (-3.95, 1.31, z), (.3, .07, .07), M["red"], .03)
     cube("GrillHood", (-3.95, 1.72, 5.26), (.5, .46, .15), M["charcoal"], .05)
     cube("GrillPanel", (-3.68, 1.3, 3.55), (.03, .12, .2), M["yellow"], .015)
-    # Drinks fridge on the right wall, with its own crate of stock in the back.
+    # Drinks fridge on the right wall; its stock lives upstairs with everything else.
     # Открытый холодильник: банки должны читаться из зала, поэтому дверцы нет.
     cube("FridgeBack", (4.32, 1.05, 4.45), (.18, 1.05, .95), M["chrome"], .04)
     cube("FridgeTop", (4.04, 2.01, 4.45), (.46, .09, .95), M["chrome"], .04)
@@ -210,10 +211,6 @@ def make_station():
         for i in range(4):
             cyl("FridgeCan", (3.96, .68 + row*.62, 3.78 + i*.45), .07, .22, M["cyan"], 8)
     cube("FridgeLight", (4.04, 1.9, 4.45), (.4, .04, .84), M["cyan"], .02)
-    cube("DrinkCrate", (0, .42, 4.6), (.6, .42, .42), M["brown"], .08)
-    cube("DrinkCrateBand", (0, .44, 4.16), (.4, .14, .03), M["cyan"], .02)
-    for i in range(3):
-        cyl("DrinkCrateCan", (-.28 + i*.28, .94, 4.6), .07, .22, M["cyan"], 8)
     # Shelves against the back wall keep the depth of the room readable.
     for x in (-1.5, 1.5):
         cube("ShelfFrame", (x, 1.25, 6.0), (1.42, 1.2, .38), M["charcoal"])
@@ -222,8 +219,8 @@ def make_station():
             for col in range(5):
                 color = M["yellow"] if (row+col)%2 else M["red"]
                 cube("Product", (x-1.02+col*.51, .68 + row*.75, 5.5), (.18,.18,.2), color, .025)
-    cube("StockCrate", (2.75, .35, 6.0), (.48, .35, .38), M["brown"], .08)
-    cube("StockCrateMark", (2.75, .37, 5.6), (.2, .13, .025), M["yellow"], .025)
+    cube("StockCrate", (3.62, .35, 6.0), (.46, .35, .38), M["brown"], .08)
+    cube("StockCrateMark", (3.62, .37, 5.6), (.2, .13, .025), M["yellow"], .025)
     # High-contrast utility points: the panel by the counter, the lost-and-found at the door.
     cube("FuseFrame", (-4.47, 1.45, 1.2), (.18, .72, .62), M["yellow"], .07)
     cube("FuseBox", (-4.27, 1.45, 1.2), (.06, .58, .49), M["chrome"], .04)
@@ -267,16 +264,16 @@ def make_station():
 
 
 def make_second_floor():
-    """A real walkable stock room and exterior stair above the existing shop."""
+    """A real walkable stock room and exterior stair above the shop."""
     reset()
-    # The slab sits directly over the old roof. The room stays compact so the
-    # exterior stair and its landing remain readable from the forecourt.
-    cube("UpperFloor", (0, 3.56, 1.2), (4.58, .12, 3.68), M["concrete"], .025)
-    cube("UpperBackWall", (0, 4.78, 4.76), (4.58, 1.1, .12), M["cream"])
-    cube("UpperLeftWall", (-4.48, 4.78, 1.2), (.12, 1.1, 3.45), M["cream"])
+    # The slab covers the whole shop below: a shorter room would leave a gap
+    # over the back of the store, and the see-through roof would show it.
+    cube("UpperFloor", (0, 3.56, 2.0), (4.58, .12, 4.48), M["concrete"], .025)
+    cube("UpperBackWall", (0, 4.78, 6.36), (4.58, 1.1, .12), M["cream"])
+    cube("UpperLeftWall", (-4.48, 4.78, 2.0), (.12, 1.1, 4.25), M["cream"])
     # The right-hand wall has a proper doorway onto the outside landing.
     cube("UpperRightWallFront", (4.48, 4.78, -.05), (.12, 1.1, 2.2), M["cream"])
-    cube("UpperRightWallBack", (4.48, 4.78, 4.35), (.12, 1.1, .38), M["cream"])
+    cube("UpperRightWallBack", (4.48, 4.78, 5.17), (.12, 1.1, 1.18), M["cream"])
     cube("UpperDoorHeader", (4.48, 5.75, 3.15), (.14, .13, .82), M["charcoal"], .025)
     for z in (2.36, 3.94):
         cube("UpperDoorFrame", (4.58, 4.7, z), (.13, 1.05, .07), M["charcoal"], .02)
@@ -284,24 +281,33 @@ def make_second_floor():
     cube("UpperDoorWindow", (4.55, 4.93, 3.15), (.018, .34, .48), M["glass"], .018)
     cube("UpperDoorHandle", (4.50, 4.62, 2.63), (.035, .22, .035), M["yellow"], .018)
 
-    # Front windows keep the new room visible instead of turning it into a box.
+    # Front windows keep the room visible instead of turning it into a box.
     cube("UpperFrontBase", (0, 4.02, -2.36), (4.48, .43, .12), M["red"])
     cube("UpperFrontGlass", (0, 4.95, -2.38), (3.95, .47, .045), M["glass"], .025)
     for x in (-4.42, -2.0, 0, 2.0, 4.42):
         cube("UpperWindowFrame", (x, 4.95, -2.43), (.06, .53, .08), M["charcoal"], .02)
     cube("UpperFascia", (0, 5.7, -2.4), (4.58, .25, .14), M["red"])
-    cube("UpperRoof", (0, 6.0, 1.2), (4.72, .13, 3.82), M["darkred"], .035)
+    cube("UpperRoof", (0, 6.0, 2.0), (4.72, .13, 4.62), M["darkred"], .035)
 
-    # Two unmistakable low-poly supply racks. Coffee is cyan-banded, food is
-    # yellow-banded; individual cartons make the remaining stock legible.
-    for x, prefix, band in ((-1.75, "CoffeeStock", M["cyan"]), (1.75, "SnackStock", M["yellow"])):
-        cube(prefix + "Rack", (x, 4.35, 4.1), (1.22, .72, .42), M["charcoal"], .045)
+    # Four supply racks along the back wall — one per counter downstairs.
+    # The coloured band says what is on the shelf; cartons make the stock legible.
+    racks = ((-3.3, "CoffeeStock", M["cyan"]), (-1.1, "SnackStock", M["yellow"]),
+             (1.1, "HotdogStock", M["red"]), (3.3, "SodaStock", M["lime"]))
+    for x, prefix, band in racks:
+        cube(prefix + "Rack", (x, 4.35, 5.95), (1.05, .72, .42), M["charcoal"], .045)
         for row in range(2):
-            cube(prefix + "Shelf", (x, 3.92 + row*.72, 3.64), (1.28, .045, .48), M["chrome"], .015)
-            for col in range(5):
-                carton_x = x - .86 + col*.43
-                cube(prefix + "Carton", (carton_x, 4.15 + row*.72, 3.68), (.16, .19, .22), M["brown"], .035)
-                cube(prefix + "Band", (carton_x, 4.15 + row*.72, 3.445), (.12, .055, .018), band, .012)
+            cube(prefix + "Shelf", (x, 3.92 + row*.72, 5.49), (1.1, .045, .48), M["chrome"], .015)
+            for col in range(4):
+                carton_x = x - .69 + col*.46
+                cube(prefix + "Carton", (carton_x, 4.15 + row*.72, 5.53), (.17, .19, .22), M["brown"], .035)
+                cube(prefix + "Band", (carton_x, 4.15 + row*.72, 5.295), (.13, .055, .018), band, .012)
+
+    # A workbench by the door: the toolbox lives up here now, in plain sight.
+    cube("ToolBench", (4.05, 4.06, 1.3), (.45, .5, .42), M["charcoal"], .04)
+    cube("ToolBenchTop", (4.05, 4.6, 1.3), (.49, .06, .46), M["chrome"], .02)
+    cube("ToolBoard", (4.4, 5.1, 1.3), (.06, .46, .52), M["red"], .03)
+    for z, size in ((.95, .06), (1.3, .09), (1.65, .05)):
+        cube("ToolBoardHook", (4.32, 5.12, z), (.02, size, size), M["chrome"], .012)
 
     # Exterior stair along the right wall. Solid stepped blocks keep the mesh
     # very cheap and match the height function used by the browser controller.

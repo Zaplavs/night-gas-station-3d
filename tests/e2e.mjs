@@ -36,11 +36,11 @@ if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter 
 const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const findSpot=(job,y)=>{const p=job.pos();for(let r=.2;r<=1.7;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,y))continue;g.player.position.set(x,y,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
-  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0,soda:0};g.updateHud();g.createRestockJob('coffee');g.createRestockJob('snack');
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0,hotdog:0,soda:0};g.updateHud();g.createRestockJob('coffee');g.createRestockJob('snack');
   const heights=[];for(let i=0;i<=14;i++)heights.push(g.floorHeight(5.82,-2.37+i*(5.45/14),heights.at(-1)??.26));
   out.stairsRise=heights.every((h,i)=>i===0||h>heights[i-1])&&heights.at(-1)>3.5;
   out.stairsWalkable=heights.every((h,i)=>!g.isBlocked(5.82,-2.37+i*(5.45/14),null,h));
-  out.upperWallsSolid=g.isBlocked(0,-2.45,null,3.68)&&g.isBlocked(-4.55,1,null,3.68)&&g.isBlocked(0,4.7,null,3.68);
+  out.upperWallsSolid=g.isBlocked(0,-2.45,null,3.68)&&g.isBlocked(-4.55,1,null,3.68)&&g.isBlocked(0,6.5,null,3.68)&&!g.isBlocked(0,5,null,3.68);
   const coffeePick=g.jobs.find(j=>j.tag==='restock-coffee-pick'),snackPick=g.jobs.find(j=>j.tag==='restock-snack-pick');
   g.player.position.set(coffeePick.pos().x,.26,coffeePick.pos().z);g.updateInteraction(0);out.noThroughFloor=g.nearest!==coffeePick;
   g.player.position.set(5.25,3.68,3.15);for(let i=0;i<30;i++)g.updateDoors(.05);out.upperDoorOpens=g.upperDoorOpen===1&&!g.isBlocked(4.22,3.15,null,3.68);
@@ -76,7 +76,7 @@ const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=120)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const stand=g.jobs.find(j=>j.tag==='supply-coffee');
   out.standHidden=!!stand&&stand.hidden===true;
-  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:5,snack:5,soda:5};g.updateHud();
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();
   g.player.position.set(stand.pos().x,3.68,stand.pos().z-.55);g.updateInteraction(0);
   out.standReachable=g.nearest===stand;
   out.fullShelfRefused=!hold(()=>g.carry==='coffeeBox',40)&&g.stockVisuals.coffee.every(o=>o.visible);
@@ -87,7 +87,7 @@ const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   out.shelfEmptied=g.stockVisuals.coffee.every(o=>!o.visible);
   g.updateInteraction(0);out.standOffersReturn=g.nearest===stand&&g.jobLabel(stand).startsWith('Верните');
   out.boxGoesBack=hold(()=>g.carry===null)&&g.stockVisuals.coffee.every(o=>o.visible)&&!g.jobs.some(j=>j.tag==='restock-coffee-put');
-  g.stock={coffee:5,snack:5,soda:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
+  g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
 if(Object.values(freeRestock).some(v=>!v))throw new Error(`Free restocking failed: ${JSON.stringify(freeRestock)}`);
 await mkdir('artifacts',{recursive:true});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(8,.26,-8);g.yaw=2.28;g.pitch=.19;g.updatePlayer(0)});await page.waitForTimeout(350);await page.screenshot({path:'artifacts/second-floor.png'});await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-3);g.yaw=0;g.pitch=-.04;g.updatePlayer(0)});
@@ -95,8 +95,8 @@ const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
   const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   const hold=(done,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!done();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return done()};
   for(const index of [0,1,2]){
-    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.jobs=g.jobs.filter(j=>j.hidden);
-    g.pumps.forEach((p,i)=>{p.car=i===index?null:{};p.broken=false});
+    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.traffic.slice().forEach(t=>g.despawn(t,g.traffic));g.jobs=g.jobs.filter(j=>j.hidden);
+    g.pumps.forEach((p,i)=>{p.car=i===index?null:{};p.broken=false;p.reserved=false});
     g.spawnCar();const car=g.cars[0];
     if(!car){out.push({index,parked:false});continue}
     for(let i=0;i<1400&&car.status!=='waiting';i++)g.updateCars(.05);
@@ -185,7 +185,7 @@ const handChecks=await page.evaluate(()=>{const g=window.__nightStation,seen={};
 if(Object.values(handChecks).some(v=>!v))throw new Error(`Hand item checks failed: ${JSON.stringify(handChecks)}`);
 const chores=await page.evaluate(()=>{const g=window.__nightStation;
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++){g.updateInteraction(.05)}g.actionHeld=false;g.actionLatched=false;return check()};
-  const goTo=p=>{g.player.position.set(p.x,.26,p.z+.9);g.updateInteraction(0)};
+  const goTo=p=>{const floor=(p.y??.26)>3?3.68:.26;g.player.position.set(p.x,floor,p.z+.9);g.updateInteraction(0)};
   const findSpot=job=>{const p=job.pos();for(let r=.35;r<=1.3;r+=.1)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   const out={};
   g.carry=null;g.updateCarry();
@@ -238,7 +238,7 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   goTo(repair.pos());
   out.repaired=hold(()=>!g.jobs.includes(repair))&&g.pumps.every(p=>!p.broken);
   out.toolsAreBack=g.carry===null;
-  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===5&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
+  out.standsStayHidden=g.jobs.filter(j=>j.hidden).length===6&&g.jobs.every(j=>!j.hidden||/^(stand|supply)-/.test(j.tag));
   return out;});
 if(Object.values(chores).some(v=>!v))throw new Error(`Mop/tool chores failed: ${JSON.stringify(chores)}`);
 const van=await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();
@@ -291,7 +291,7 @@ const jumpButton=await page.evaluate(()=>{const g=window.__nightStation,button=d
 if(Object.values(jumpButton).some(v=>!v))throw new Error(`Mobile jump button failed: ${JSON.stringify(jumpButton)}`);
 await page.waitForTimeout(400);await page.screenshot({path:'artifacts/gameplay.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='mop';g.updateCarry()});await page.waitForTimeout(500);await page.screenshot({path:'artifacts/hands.png'});await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
-await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 6')throw new Error('Guide navigation failed');await page.click('#guide-close');
+await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 7')throw new Error('Guide navigation failed');await page.click('#guide-close');
 const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
   // Сейв семисменной кампании продолжается с восьмого уровня, а не считается пройденным.
   g.setState({saveVersion:2,money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99,campaignComplete:true});
@@ -472,7 +472,7 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   const walk=(steps=1500,done=()=>false)=>{for(let i=0;i<steps&&!done();i++)g.updateCustomers(.05);return done()};
   g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
-  g.stock={coffee:5,snack:5,soda:5};g.updateHud();
+  g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();
   g.shiftConfig={...g.shiftConfig,orderIntensity:1};
   // Водитель выходит из машины сразу, не дожидаясь заправки.
   g.spawnCar();const car=g.cars[0];
@@ -488,9 +488,9 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   out.prepReachable=!!prep&&reach(prep);
   const item=g.shiftConfig.orderMenu.includes(customer.order)&&customer.order;
   out.knownItem=!!item;
-  const stockBefore=g.stock[{coffee:'coffee',snack:'snack',hotdog:'snack',soda:'soda'}[customer.order]];
+  const stockBefore=g.stock[customer.order];
   out.prepared=hold(()=>!!g.carry)&&g.hands.current===g.carry;
-  out.stockSpent=g.stock[{coffee:'coffee',snack:'snack',hotdog:'snack',soda:'soda'}[customer.order]]===stockBefore-1;
+  out.stockSpent=g.stock[customer.order]===stockBefore-1;
   const give=g.jobs.find(j=>j.tag==='order-give');
   out.handoverAtCounter=!!give&&Math.abs(give.pos().z-.52)<.01&&give.need===g.carry;
   out.giveReachable=!!give&&reach(give);
@@ -507,7 +507,7 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   // Пустая полка не даёт приготовить, но сразу ставит задачу пополнения.
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
   g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();
-  g.stock={coffee:0,snack:5,soda:5};g.updateHud();
+  g.stock={coffee:0,snack:5,hotdog:5,soda:5};g.updateHud();
   g.spawnCar();const thirsty=g.cars[0];thirsty.pump=g.pumps[0];thirsty.side=-1;thirsty.group.position.set(-4.85,-.05,-7.4);
   const guest=g.sendCustomer(thirsty,'coffee');
   out.secondCustomer=!!guest;
@@ -521,19 +521,20 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   out.lostCustomer=g.lost===lostBefore+1&&guest.state==='walkingOut';
   walk(1600,()=>g.customers.length===0);
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
-  g.stock={coffee:5,snack:5,soda:5};g.updateHud();
+  g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();
   return out;});
 if(Object.values(shopCustomers).some(v=>!v))throw new Error(`Shop customers failed: ${JSON.stringify(shopCustomers)}`);
 const shopMenu=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reachUpstairs=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,3.68))continue;g.player.position.set(x,3.68,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:30,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
   g.jobs=g.jobs.filter(j=>j.hidden);
   // Каждый товар готовится в своём месте и попадает в руки.
   out.items={};
   for(const id of ['coffee','snack','hotdog','soda']){
-    g.stock={coffee:5,snack:5,soda:5};g.carry=null;g.updateCarry();g.updateHud();
+    g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.carry=null;g.updateCarry();g.updateHud();
     const car={side:1,patience:60,group:{position:{x:-4.85,y:0,z:-7.4}}};
     const guest=g.sendCustomer(car,id);
     guest.state='waiting';guest.setPath([]);guest.position.copy(g.counterPoint(guest)).setY(.26);
@@ -547,14 +548,21 @@ const shopMenu=await page.evaluate(()=>{const g=window.__nightStation,out={};
   }
   out.fourItems=Object.values(out.items).every(Boolean)&&Object.keys(out.items).length===4;
   // Газировку пополняют из ящика в подсобке, а не со склада наверху.
-  g.stock={coffee:5,snack:5,soda:0};g.carry=null;g.updateCarry();g.updateHud();
+  g.stock={coffee:5,snack:5,hotdog:5,soda:0};g.carry=null;g.updateCarry();g.updateHud();
   g.createRestockJob('soda');
   const pick=g.jobs.find(j=>j.tag==='restock-soda-pick');
-  out.sodaCratePick=!!pick&&pick.pos().y<2&&reach(pick);
-  out.sodaTaken=!!pick&&hold(()=>g.carry==='sodaBox');
+  out.sodaFromStockRoom=!!pick&&pick.pos().y>3;
+  out.sodaTaken=!!pick&&reachUpstairs(pick)&&hold(()=>g.carry==='sodaBox');
   const put=g.jobs.find(j=>j.tag==='restock-soda-put');
   out.sodaFilled=!!put&&reach(put)&&hold(()=>g.stock.soda===5)&&g.carry===null;
-  out.hudShowsSoda=document.querySelector('#stock-soda').textContent==='5/5'&&!document.querySelector('#soda-chip').classList.contains('hidden');
+  // Хот-доги живут на своей полке и пополняются оттуда же.
+  g.stock={coffee:5,snack:5,hotdog:0,soda:5};g.carry=null;g.updateCarry();g.updateHud();
+  g.createRestockJob('hotdog');
+  const grillPick=g.jobs.find(j=>j.tag==='restock-hotdog-pick');
+  out.hotdogOwnStock=!!grillPick&&grillPick.pos().y>3&&reachUpstairs(grillPick)&&hold(()=>g.carry==='hotdogBox');
+  const grillPut=g.jobs.find(j=>j.tag==='restock-hotdog-put');
+  out.hotdogFilled=!!grillPut&&reach(grillPut)&&hold(()=>g.stock.hotdog===5)&&g.stock.snack===5;
+  out.hudShowsSoda=document.querySelector('#stock-soda').textContent==='5/5'&&!document.querySelector('#soda-chip').classList.contains('hidden')&&!document.querySelector('#hotdog-chip').classList.contains('hidden');
   // Витрины пустеют вместе с запасом.
   const cans=g.shelfVisuals.soda.filter(o=>o.visible).length;
   g.stock.soda=1;g.renderShelves();

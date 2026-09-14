@@ -19,10 +19,10 @@ export const MENU = Object.freeze({
   }),
   // Хот-дог дольше всех: гриль стоит у левой стены, и за ним надо идти.
   hotdog: define({
-    id: 'hotdog', name: 'хот-дог', accusative: 'хот-дог', station: 'grill', stock: 'snack',
+    id: 'hotdog', name: 'хот-дог', accusative: 'хот-дог', station: 'grill', stock: 'hotdog',
     prep: 2.4, price: 74, carry: 'hotdog', track: 'hotdogs',
   }),
-  // Газировка быстрая и дорогая, но её запас лежит в подсобке и кончается первым.
+  // Газировка быстрая и дорогая, но её запас кончается первым.
   soda: define({
     id: 'soda', name: 'газировка', accusative: 'газировку', station: 'fridge', stock: 'soda',
     prep: 0.8, price: 62, carry: 'soda', track: 'sodas',
@@ -31,7 +31,8 @@ export const MENU = Object.freeze({
 
 export const MENU_IDS = Object.freeze(Object.keys(MENU));
 
-/* Запасы магазина. Кофе и еду носят со склада наверху, газировку — из ящика в подсобке. */
+/* Запасы магазина. Всё, чем торгует прилавок, лежит на складе второго этажа:
+   четыре стеллажа, по одному на каждую витрину. */
 export const STOCKS = Object.freeze({
   coffee: Object.freeze({
     id: 'coffee', label: 'кофе', chip: 'КОФЕ', gone: 'Кофе закончился', full: 'Кофемашина и так полная',
@@ -41,9 +42,13 @@ export const STOCKS = Object.freeze({
     id: 'snack', label: 'еды', chip: 'ЕДА', gone: 'Еда закончилась', full: 'Витрина и так полная',
     source: 'upstairs', carry: 'snackBox', target: 'Пополните витрину еды', where: 'Склад на 2 этаже · лестница снаружи справа',
   }),
+  hotdog: Object.freeze({
+    id: 'hotdog', label: 'хот-догов', chip: 'ХОТ-ДОГИ', gone: 'Хот-доги закончились', full: 'Гриль и так полный',
+    source: 'upstairs', carry: 'hotdogBox', target: 'Пополните гриль', where: 'Склад на 2 этаже · лестница снаружи справа',
+  }),
   soda: Object.freeze({
     id: 'soda', label: 'газировки', chip: 'ГАЗИРОВКА', gone: 'Газировка закончилась', full: 'Холодильник и так полный',
-    source: 'shop', carry: 'sodaBox', target: 'Пополните холодильник', where: 'Ящик с запасом — в подсобке слева',
+    source: 'upstairs', carry: 'sodaBox', target: 'Пополните холодильник', where: 'Склад на 2 этаже · лестница снаружи справа',
   }),
 });
 
