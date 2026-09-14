@@ -308,7 +308,7 @@ class NightStationGame{
     const r=PLAYER_RADIUS,onStairs=x>STAIR.minX+.14&&x<STAIR.maxX-.14&&z>STAIR.minZ&&z<STAIR.maxZ,onLanding=x>UPPER_LANDING.minX+.04&&x<UPPER_LANDING.maxX-.52&&z>UPPER_LANDING.minZ+.06&&z<UPPER_LANDING.maxZ-.22,onRoom=x>UPPER_ROOM.minX+r&&x<UPPER_ROOM.maxX-r*.1&&z>UPPER_ROOM.minZ+r&&z<UPPER_ROOM.maxZ-r;
     if(!onStairs&&!onLanding&&!onRoom)return true;
     const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
-    if(onRoom&&([[-4.35,4.35,5.53,6.37],[3.56,4.54,.86,1.74]].some(a=>hitRect(...a))))return true;
+    if(onRoom&&([[-4.35,4.35,5.53,6.37],[3.56,4.54,.86,1.74],[3.42,4.36,-1.72,-1.08]].some(a=>hitRect(...a))))return true;
     if(this.upperDoorOpen<.72&&hitRect(4.38,4.72,2.38,3.9))return true;
     return false
   }
@@ -316,9 +316,9 @@ class NightStationGame{
     if(y>GROUND_Y+.08)return this.isUpperBlocked(x,z);
     const r=PLAYER_RADIUS;if(x<WORLD.minX+r||x>WORLD.maxX-r||z<WORLD.minZ+r||z>WORLD.maxZ-r)return true;const hitRect=(minX,maxX,minZ,maxZ)=>x>minX-r&&x<maxX+r&&z>minZ-r&&z<maxZ+r;
     const fixed=[[-4.95,4.95,6.36,6.64],[-4.92,-4.44,-2.7,6.64],[4.44,4.92,-2.7,6.64],[-4.72,-1.27,-2.72,-2.5],[1.27,4.72,-2.72,-2.5],
-      [-3.12,3.12,.42,1.9],[-2.96,-.04,5.55,6.42],[.04,2.96,5.55,6.42],[-4.5,-3.4,3.45,5.45],[3.5,4.55,3.45,5.45],[-.65,.65,4.15,5.05],...PUMP_RECTS];if(fixed.some(a=>hitRect(...a)))return true;
+      [-3.12,3.12,.42,1.9],[-2.96,-.04,5.55,6.42],[.04,2.96,5.55,6.42],[-4.5,-3.4,3.45,5.45],[3.5,4.55,3.45,5.45],[3.16,4.08,5.62,6.38],...PUMP_RECTS];if(fixed.some(a=>hitRect(...a)))return true;
     if(this.doorGlass.some(door=>hitRect(door.position.x-.6,door.position.x+.6,-2.74,-2.58)))return true;
-    const circles=[[-6.6,-5.2,.3],[-4.05,-1.75,.45],[-1.5,2.5,.5],[4.05,-2.05,.52],[2.75,6,.5],[-6.6,-8.52,.24],[-11.5,-3.7,.17],[-8.9,-3.7,.17],[-11.5,-2.4,.15]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
+    const circles=[[-6.6,-5.2,.3],[-4.05,-1.75,.45],[4.05,-2.05,.52],[-6.6,-8.52,.24],[-11.5,-3.7,.17],[-8.9,-3.7,.17],[-11.5,-2.4,.15]];if(circles.some(([cx,cz,cr])=>Math.hypot(x-cx,z-cz)<r+cr))return true;
     for(const c of this.cars){if(c!==ignoreVehicle&&this.pointInVehicle(x,z,c,PLAYER_RADIUS))return true}for(const v of this.specialVehicles()){if(v!==ignoreVehicle&&this.pointInVehicle(x,z,v,PLAYER_RADIUS))return true}return false
   }
   pointInVehicle(x,z,vehicle,margin=0,position=vehicle.group.position,rotationY=vehicle.group.rotation.y){

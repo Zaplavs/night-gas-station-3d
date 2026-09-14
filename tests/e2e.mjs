@@ -30,6 +30,9 @@ const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOp
   toGrill:clearRoute([[-2.6,2.9],[-2.9,3.6],[-2.9,4.45]]),
   toFridge:clearRoute([[1.2,2.9],[2.8,3.4],[2.8,4.45]]),
   hallRoute:clearRoute([[-3,-1.9],[3,-1.9]]),
+  // Убранный из зала инвентарь не должен оставлять за собой невидимых препятствий.
+  crossAisle:clearRoute([[-2.6,2.9],[2.6,2.9]]),
+  backAisle:clearRoute([[0,2.9],[0,4.9]]),
   binInHall:g.station.getObjectByName('TrashBin').position.z<0,
   mopUpstairs:g.kit.position.y>3.4&&g.kit.position.x<4.36}});
 if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter are blocked: ${JSON.stringify(shopAccess)}`);
