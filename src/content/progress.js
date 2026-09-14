@@ -1,10 +1,16 @@
 import { CAMPAIGN_SHIFT_COUNT, PLAY_MODE } from './shifts.js';
 import { TRACKED_STATS, createStats, sanitizeAchievements } from './achievements.js';
+import { sanitizeUpgrades } from './upgrades.js';
 
 /* v3: кампания выросла с 7 смен до 30 уровней, в сохранении появился номер
-   пройденного уровня. v4: добавились счётчики достижений. Старые сейвы
-   поднимаются сюда без потерь. */
-export const SAVE_VERSION = 4;
+   пройденного уровня. v4: добавились счётчики достижений. v5: мелкие прибавки
+   заменились выкупом самой станции — старые уровни улучшений возвращаются
+   деньгами, а ботинки, которые никуда не делись, остаются купленными.
+   Старые сейвы поднимаются сюда без потерь. */
+export const SAVE_VERSION = 5;
+export const STATION_UPGRADES_VERSION = 5;
+/* Сколько стоили старые прибавки: столько же и вернётся в кассу. */
+const LEGACY_UPGRADE_PRICES = Object.freeze({ speed: 200, service: 250, coffee: 180 });
 export const CAMPAIGN_30_VERSION = 3;
 export const LEGACY_CAMPAIGN_LENGTH = 7;
 
@@ -18,7 +24,7 @@ export const DEFAULT_PROGRESS = Object.freeze({
   money: 0,
   shift: 1,
   rep: 3,
-  upgrades: Object.freeze({ speed: 0, service: 0, coffee: 0 }),
+  upgrades: Object.freeze([]),
   tutorial: false,
   sound: true,
   musicVolume: 80,
@@ -49,7 +55,17 @@ export function migrateProgress(saved) {
       : Math.min(requestedShift, CAMPAIGN_SHIFT_COUNT);
   }
 
-  const upgrades = source.upgrades && typeof source.upgrades === 'object' ? source.upgrades : {};
+  const rawUpgrades = source.upgrades;
+  const legacyUpgrades = rawUpgrades && !Array.isArray(rawUpgrades) && typeof rawUpgrades === 'object' ? rawUpgrades : null;
+  const upgrades = legacyUpgrades
+    ? sanitizeUpgrades(nonNegativeInt(legacyUpgrades.speed) > 0 ? ['boots'] : [])
+    : sanitizeUpgrades(rawUpgrades);
+  // Возврат за то, чего больше нет: ботинки остаются, остальное — деньгами.
+  const refund = legacyUpgrades
+    ? Math.min(3, nonNegativeInt(legacyUpgrades.service)) * LEGACY_UPGRADE_PRICES.service
+      + Math.min(3, nonNegativeInt(legacyUpgrades.coffee)) * LEGACY_UPGRADE_PRICES.coffee
+      + Math.max(0, Math.min(3, nonNegativeInt(legacyUpgrades.speed)) - 1) * LEGACY_UPGRADE_PRICES.speed
+    : 0;
   const clearedFallback = playMode === PLAY_MODE.CAMPAIGN ? shift - 1 : 0;
   const levelsCleared = Math.min(
     CAMPAIGN_SHIFT_COUNT,
@@ -67,14 +83,10 @@ export function migrateProgress(saved) {
     campaignEarnings: nonNegativeInt(source.campaignEarnings),
     campaignServed: nonNegativeInt(source.campaignServed),
     levelsCleared,
-    money: nonNegativeInt(source.money),
+    money: nonNegativeInt(source.money) + refund,
     shift,
     rep: Math.max(1, Math.min(5, finiteNumber(source.rep, DEFAULT_PROGRESS.rep))),
-    upgrades: {
-      speed: Math.min(3, nonNegativeInt(upgrades.speed)),
-      service: Math.min(3, nonNegativeInt(upgrades.service)),
-      coffee: Math.min(3, nonNegativeInt(upgrades.coffee)),
-    },
+    upgrades,
     tutorial: Boolean(source.tutorial),
     sound: source.sound !== false,
     musicVolume: Math.max(0, Math.min(100, finiteNumber(source.musicVolume, DEFAULT_PROGRESS.musicVolume))),

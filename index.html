@@ -69,6 +69,7 @@
       <div class="menu-actions">
         <button id="continue-btn" class="primary">ПРОДОЛЖИТЬ СМЕНУ <span>→</span></button>
         <button id="levels-btn" class="secondary">УРОВНИ</button>
+        <button id="station-btn" class="secondary">СТАНЦИЯ</button>
         <button id="achievements-btn" class="secondary">ДОСТИЖЕНИЯ</button>
         <button id="new-btn" class="secondary">НОВАЯ ИГРА</button>
       </div>
@@ -111,6 +112,17 @@
     </div>
   </section>
 
+  <section id="station" class="screen modal-screen hidden">
+    <div class="dialog levels-card">
+      <div class="guide-top">
+        <p class="eyebrow">СТАНЦИЯ · <span id="station-progress">…</span></p>
+        <button id="station-close" aria-label="Закрыть">×</button>
+      </div>
+      <p class="station-wallet">В кассе <b id="station-money">₽0</b> · улучшения покупаются навсегда и работают со следующей ночи</p>
+      <div id="station-grid"></div>
+    </div>
+  </section>
+
   <section id="achievements" class="screen modal-screen hidden">
     <div class="dialog levels-card">
       <div class="guide-top">
@@ -144,10 +156,8 @@
       <div class="result-row"><div><small>ЗАРАБОТАНО</small><b id="result-money">₽0</b></div><div><small>ОБСЛУЖЕНО</small><b id="result-served">0</b></div><div><small>РЕПУТАЦИЯ</small><b id="result-rep">3.0★</b></div><div><small>РЕКОРД</small><b id="result-best">₽0</b></div></div>
       <div id="result-goal"></div>
       <div class="upgrades">
-        <p>УЛУЧШЕНИЯ НА СЛЕДУЮЩУЮ СМЕНУ</p>
-        <button data-upgrade="speed"><span>Быстрые кроссовки<small>Скорость +12%</small></span><b>₽200</b></button>
-        <button data-upgrade="service"><span>Хороший инструмент<small>Действия +15%</small></span><b>₽250</b></button>
-        <button data-upgrade="coffee"><span>Зёрна получше<small>Кофе дороже на ₽15</small></span><b>₽180</b></button>
+        <p>СТАНЦИЯ</p>
+        <button id="results-station"><span id="station-teaser">Посмотреть, что можно выкупить<small>Заработанное остаётся на станции</small></span><b id="station-badge">→</b></button>
       </div>
       <button id="reward-btn" class="secondary hidden">СМОТРЕТЬ РЕКЛАМУ: НАДБАВКА К ЗАРАБОТКУ</button>
       <button id="next-shift" class="primary">СЛЕДУЮЩАЯ СМЕНА <span>→</span></button>

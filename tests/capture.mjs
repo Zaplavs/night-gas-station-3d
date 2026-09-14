@@ -37,5 +37,9 @@ await page.evaluate(async()=>{const g=window.__nightStation,{VEHICLES}=await imp
 await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/08-vehicles.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffeeBox';g.updateCarry();g.hands.raise=1;g.player.position.set(0,3.68,1.9);g.yaw=Math.PI;g.pitch=-.03;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(600);await page.screenshot({path:'public/tutorial/07-stock.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
+// Витрина станции: часть выкуплена, часть по карману, часть ещё впереди.
+await page.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,money:3400,levelsCleared:11,shift:12,upgrades:['boots','coffeeBar']});g.openStation('menu')});
+await page.locator('#station:not(.hidden)').waitFor();await page.waitForTimeout(400);await page.screenshot({path:'public/tutorial/09-station.png'});
+await page.evaluate(()=>{const g=window.__nightStation;g.closeStation();g.setState({...g.state,money:0,levelsCleared:0,shift:1,upgrades:[]})});
 await page.setViewportSize({width:1024,height:1024});await page.evaluate(()=>{const g=window.__nightStation;document.querySelectorAll('body > *:not(#game)').forEach(e=>e.style.display='none');g.mode='capture';g.updateMenu=()=>{};g.scene.traverse(o=>{if(['RoadSign','RoadSign24','ShopSign','ShopSign24'].includes(o.name))o.visible=false});g.camera.fov=34;g.camera.updateProjectionMatrix();g.camera.position.set(8,6,-13);g.camera.lookAt(1.5,1,-6.8);g.renderer.render(g.scene,g.camera)});await page.waitForTimeout(300);await page.locator('#scene').screenshot({path:'promo/icon-1024x1024.png'});
-console.log('Captured icon, cover, eight tutorial screens and five gameplay screenshots.');await browser.close();
+console.log('Captured icon, cover, nine tutorial screens and five gameplay screenshots.');await browser.close();

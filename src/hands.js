@@ -76,6 +76,28 @@ function crate(accent=PAL.tape,key='stock'){
   return g;
 }
 
+/* Тележка со склада: на ней едет сразу весь запас, который кончился. */
+function cart(){
+  const g=new THREE.Group();
+  const card=mat('card',PAL.card,.95),steel=mat('cart-steel',0x9aa5ab,.45,.5);
+  put(g,box('cart-deck',.42,.03,.3),steel,0,-.16,0);
+  put(g,box('cart-post',.03,.3,.03),steel,-.19,0,.13);
+  put(g,box('cart-post2',.03,.3,.03),steel,.19,0,.13);
+  put(g,box('cart-bar',.42,.03,.03),steel,0,.15,.13);
+  put(g,box('crate',.32,.2,.24),card,0,-.03,-.02);
+  put(g,box('tape',.325,.03,.018),mat('tape',PAL.tape,.9),0,.068,-.02);
+  put(g,box('crate-top',.26,.16,.2),card,0,.16,-.02);
+  put(g,box('label',.09,.06,.004),mat('cart-label',0x37d5ef,.72),-.08,-.03,-.145);
+  put(g,box('label2',.09,.06,.004),mat('cart-label2',PAL.yellow,.72),.08,-.03,-.145);
+  const l=hand(-1),r=hand(1);
+  l.position.set(-.19,.12,.16);l.rotation.set(.1,0,-1.1);
+  r.position.set(.19,.12,.16);r.rotation.set(.1,0,1.1);
+  g.add(l,r);
+  g.position.set(0,-.34,-.86);g.rotation.set(.12,0,0);
+  g.userData.anim=(o,t,use)=>{o.rotation.z=Math.sin(t*1.1)*.015;o.position.y=-.34+Math.sin(t*1.4)*.008;o.position.z=-.86+use*.08};
+  return g;
+}
+
 /* Хот-дог с гриля: булка, сосиска и зигзаг горчицы. */
 function hotdog(){
   const g=new THREE.Group();
@@ -187,7 +209,7 @@ export class HandView{
     this.sway=new THREE.Vector2();this.swayTo=new THREE.Vector2();this.aspect=0;
   }
   build(assets){
-    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),hotdog:hotdog(),soda:soda(),hotdogBox:crate(0xc8402c,'hotdog-stock'),sodaBox:crate(0x69c96f,'soda-stock'),bag:lostBag(assets&&assets.bag)};
+    const made={coffee:coffee(),snack:snack(),box:crate(),coffeeBox:crate(0x37d5ef,'coffee-stock'),snackBox:crate(PAL.yellow,'snack-stock'),mop:mop(),tools:tools(),hose:fuelHose(),tankerHose:fuelHose(),hotdog:hotdog(),soda:soda(),hotdogBox:crate(0xc8402c,'hotdog-stock'),sodaBox:crate(0x69c96f,'soda-stock'),cart:cart(),bag:lostBag(assets&&assets.bag)};
     for(const [name,group] of Object.entries(made)){group.visible=false;this.items[name]=group;this.rig.add(group)}
   }
   set(name){

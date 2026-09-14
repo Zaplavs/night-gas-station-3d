@@ -85,6 +85,8 @@ const defineLevel = ({
   orderMenu = [],
   startStock = { coffee: 5, snack: 5, hotdog: 5, soda: 5 },
   pumpsOnline = 2,
+  /* Ночь, где закрытая колонка — это задание: выкупленный пост её не открывает. */
+  bayLock = false,
   fuelReserve = null,
   weather = 'clear',
   allowedEvents = [],
@@ -115,6 +117,7 @@ const defineLevel = ({
   orderMenu: Object.freeze([...orderMenu]),
   startStock: Object.freeze({ coffee: startStock.coffee, snack: startStock.snack, hotdog: startStock.hotdog ?? startStock.snack, soda: startStock.soda ?? 5 }),
   pumpsOnline,
+  bayLock,
   fuelReserve,
   weather,
   allowedEvents: Object.freeze([...allowedEvents]),
@@ -292,7 +295,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     scripted: [{ at: 45, event: 'broken' }],
   }),
   defineLevel({
-    number: 17, chapter: 4, name: 'Одна колонка',
+    number: 17, chapter: 4, name: 'Одна колонка', bayLock: true,
     brief: 'Работает только первая колонка. Вся ночь — через неё, очередь будет длинной.',
     duration: 250, goal: { served: 9, maxLost: 2 },
     carSpawn: { initialDelay: 1, interval: [15, 19] }, queueSize: 3, pumpsOnline: 1,
@@ -369,7 +372,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     scripted: [{ at: 40, event: 'whisper' }, { at: 95, event: 'van' }, { at: 175, event: 'blackout' }],
   }),
   defineLevel({
-    number: 24, chapter: 5, name: 'Одна колонка в темноте',
+    number: 24, chapter: 5, name: 'Одна колонка в темноте', bayLock: true,
     brief: 'Открыт только первый пост, и свет ненадёжен. Очередь будет длинной.',
     duration: 270, goal: { served: 11, maxLost: 3 },
     carSpawn: { initialDelay: 0.9, interval: [12, 16] }, queueSize: 3, pumpsOnline: 1,
@@ -420,7 +423,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     rushes: [{ at: 80, duration: 45, interval: [5.5, 8], queueBoost: 2, label: 'Волна с трассы' }],
   }),
   defineLevel({
-    number: 28, chapter: 6, name: 'Темно и тесно',
+    number: 28, chapter: 6, name: 'Темно и тесно', bayLock: true,
     brief: 'Один пост, туман до самой трассы и два отключения света за ночь.',
     duration: 285, goal: { served: 13, maxLost: 3 },
     carSpawn: { initialDelay: 0.8, interval: [11, 14] }, queueSize: 3, pumpsOnline: 1,

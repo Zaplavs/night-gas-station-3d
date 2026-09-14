@@ -9,6 +9,10 @@ import { EVENT_TYPES, PLAY_MODE, createEndlessShift, getShiftConfig, isFinalCamp
 import { MENU, MENU_IDS, STOCKS, MAX_STOCK, getMenuItem, shelfCount } from '../src/content/menu.js';
 import { migrateProgress, DEFAULT_PROGRESS, SAVE_VERSION, LEGACY_CAMPAIGN_LENGTH } from '../src/content/progress.js';
 import { VEHICLES, VEHICLE_IDS, getVehicle, normalizeFleet, rollVehicle, queueOffsets } from '../src/content/vehicles.js';
+import {
+  UPGRADES, UPGRADE_COUNT, UPGRADE_IDS, getUpgrade, sanitizeUpgrades, isUpgradeVisible,
+  visibleUpgrades, affordableUpgrades, applyUpgradesToShift,
+} from '../src/content/upgrades.js';
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -246,7 +250,8 @@ const legacyDone = migrateProgress({ saveVersion: 2, shift: 7, campaignComplete:
 check(!legacyDone.campaignComplete, 'Старая семисменная кампания больше не считается пройденной');
 check(legacyDone.shift === LEGACY_CAMPAIGN_LENGTH + 1, `Старый сейв должен продолжиться с 8 уровня, а не с ${legacyDone.shift}`);
 check(legacyDone.levelsCleared === LEGACY_CAMPAIGN_LENGTH, 'Пройденные смены должны зачесться как уровни');
-check(legacyDone.money === 900 && legacyDone.upgrades.speed === 2, 'Деньги и улучшения должны переехать');
+check(legacyDone.money === 900 + 200, 'Деньги должны переехать, а лишние уровни старых прибавок — вернуться');
+check(legacyDone.upgrades.includes('boots'), 'Купленная скорость должна стать ботинками');
 check(Math.abs(legacyDone.rep - 4.1) < 1e-9, 'Репутация должна сохраниться');
 
 const legacyMid = migrateProgress({ saveVersion: 2, shift: 4, money: 120 });
@@ -325,6 +330,59 @@ check(offsets[2] > offsets[1], 'Очередь должна идти в одну
 check(queueOffsets([VEHICLES.bike.halfLength, VEHICLES.bike.halfLength], 1.35)[1]
   < queueOffsets([VEHICLES.car.halfLength, VEHICLES.car.halfLength], 1.35)[1],
   'Мотоциклы должны стоять плотнее легковых');
+
+/* ─── Экономика: станция выкупается за ночную выручку ─── */
+check(UPGRADE_COUNT >= 6, `Улучшений должно быть хотя бы шесть, а не ${UPGRADE_COUNT}`);
+check(new Set(UPGRADE_IDS).size === UPGRADE_COUNT, 'Идентификаторы улучшений должны быть уникальными');
+UPGRADES.forEach((upgrade, index) => {
+  const at = `Улучшение «${upgrade.name}»`;
+  check(upgrade.cost >= 500, `${at}: цена должна быть заметной, а не ₽${upgrade.cost}`);
+  check(typeof upgrade.hint === 'string' && upgrade.hint.length > 6, `${at}: нужен понятный эффект`);
+  check(typeof upgrade.note === 'string' && upgrade.note.length > 20, `${at}: нужно описание, что меняется на станции`);
+  check(typeof upgrade.icon === 'string' && upgrade.icon.length > 0, `${at}: нужен значок`);
+  if (index > 0) {
+    check(upgrade.cost > UPGRADES[index - 1].cost, `${at}: список должен идти по возрастанию цены`);
+    check(upgrade.unlock >= UPGRADES[index - 1].unlock, `${at}: открываться раньше предыдущего нельзя`);
+  }
+});
+check(UPGRADES[0].cost <= 900, 'Первое улучшение должно быть по карману после пары ночей');
+check(UPGRADES.at(-1).cost >= 5000, 'Последнее улучшение должно быть целью на всю кампанию');
+check(UPGRADES.reduce((sum, u) => sum + u.cost, 0) > 15000, 'Вся станция не должна выкупаться за одну ночь');
+check(UPGRADES.every((u) => u.unlock <= CAMPAIGN_LEVEL_COUNT), 'Улучшение не может открываться после конца кампании');
+
+check(sanitizeUpgrades(['boots', 'ufo', 'boots']).join() === 'boots', 'Мусор и повторы в списке купленного игнорируются');
+check(sanitizeUpgrades(null).length === 0, 'Пустое сохранение — пустая станция');
+check(getUpgrade('ufo') === null, 'Неизвестное улучшение не выдумывается');
+check(!isUpgradeVisible(getUpgrade('cart'), 0), 'Тележка не должна предлагаться в первую ночь');
+check(isUpgradeVisible(getUpgrade('boots'), 0), 'Ботинки видно с самого начала');
+check(visibleUpgrades(0).length < UPGRADE_COUNT, 'Витрина должна открываться постепенно');
+check(visibleUpgrades(CAMPAIGN_LEVEL_COUNT).length === UPGRADE_COUNT, 'К концу кампании должно открыться всё');
+check(affordableUpgrades({ money: 0, levelsCleared: 29, upgrades: [] }).length === 0, 'Без денег покупать нечего');
+check(affordableUpgrades({ money: UPGRADES[0].cost, levelsCleared: 29, upgrades: [] })[0]?.id === UPGRADES[0].id,
+  'По карману должно быть ровно то, на что хватает денег');
+check(affordableUpgrades({ money: 99999, levelsCleared: 29, upgrades: UPGRADE_IDS }).length === 0,
+  'Купленное второй раз не предлагают');
+
+/* Эффекты, меняющие ночь, должны работать на данных, а не на честном слове. */
+const plainNight = getLevel(11);
+check(plainNight.pumpsOnline === 2, 'Одиннадцатая ночь должна идти на двух постах');
+check(applyUpgradesToShift(plainNight, ['thirdBay']).pumpsOnline === 3, 'Выкупленный пост должен открываться');
+check(applyUpgradesToShift(plainNight, []).pumpsOnline === 2, 'Без покупки третий пост закрыт');
+const lockedNight = CAMPAIGN_LEVELS.find((level) => level.bayLock);
+check(!!lockedNight && lockedNight.pumpsOnline === 1, 'Ночь про аварию идёт на одной колонке');
+check(applyUpgradesToShift(lockedNight, ['thirdBay']).pumpsOnline === 1, 'Авария сильнее выкупленного поста');
+check(CAMPAIGN_LEVELS.filter((level) => level.bayLock).every((level) => level.pumpsOnline === 1),
+  'Замок на посты ставится только там, где колонки закрыты');
+const brighter = applyUpgradesToShift(plainNight, ['floodlights']);
+check(brighter.customerPatience > plainNight.customerPatience, 'Прожекторы должны добавлять терпения');
+const busier = applyUpgradesToShift(plainNight, ['roadSign']);
+check(busier.carSpawn.interval[0] < plainNight.carSpawn.interval[0]
+  && busier.carSpawn.interval[1] < plainNight.carSpawn.interval[1], 'Щит должен уплотнять поток');
+const rushNight = CAMPAIGN_LEVELS.find((level) => level.rushes.length);
+check(applyUpgradesToShift(rushNight, ['roadSign']).rushes[0].interval[0] < rushNight.rushes[0].interval[0],
+  'Щит должен уплотнять и наплывы');
+check(applyUpgradesToShift(plainNight, []).carSpawn.interval[0] === plainNight.carSpawn.interval[0],
+  'Без покупок ночь остаётся ровно такой, как в данных');
 
 if (failures.length) {
   console.error(`Проверка кампании не прошла (${failures.length}):`);

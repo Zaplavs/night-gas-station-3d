@@ -53,8 +53,10 @@ for (const level of CAMPAIGN_SHIFTS) {
   if (level.allowedEvents.some((type) => !EVENT_TYPES.includes(type))) throw new Error(`Level ${level.number} event pool is invalid`);
 }
 
-const legacy = migrateProgress({ money: 321, shift: 9, rep: 4.2, upgrades: { speed: 2 }, tutorial: true, sound: false, best: 99 });
-if (legacy.saveVersion !== SAVE_VERSION || legacy.campaignComplete || legacy.money !== 321 || legacy.upgrades.speed !== 2 || legacy.sound !== false) {
+// Старые прибавки превратились в выкуп станции: ботинки остались, остальное вернулось деньгами.
+const legacy = migrateProgress({ money: 321, shift: 9, rep: 4.2, upgrades: { speed: 2, coffee: 1 }, tutorial: true, sound: false, best: 99 });
+if (legacy.saveVersion !== SAVE_VERSION || legacy.campaignComplete || legacy.sound !== false
+  || !Array.isArray(legacy.upgrades) || !legacy.upgrades.includes('boots') || legacy.money !== 321 + 200 + 180) {
   throw new Error('Legacy save migration failed');
 }
 const endless = migrateProgress({ shift: 12, playMode: PLAY_MODE.ENDLESS, campaignComplete: true });

@@ -302,11 +302,12 @@ const jumpButton=await page.evaluate(()=>{const g=window.__nightStation,button=d
 if(Object.values(jumpButton).some(v=>!v))throw new Error(`Mobile jump button failed: ${JSON.stringify(jumpButton)}`);
 await page.waitForTimeout(400);await page.screenshot({path:'artifacts/gameplay.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='mop';g.updateCarry()});await page.waitForTimeout(500);await page.screenshot({path:'artifacts/hands.png'});await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
-await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 8')throw new Error('Guide navigation failed');await page.click('#guide-close');
+await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 9')throw new Error('Guide navigation failed');await page.click('#guide-close');
 const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
   // Сейв семисменной кампании продолжается с восьмого уровня, а не считается пройденным.
   g.setState({saveVersion:2,money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99,campaignComplete:true});
-  out.legacyContinues=g.state.saveVersion===4&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321&&g.state.upgrades.speed===2;
+  // Старый сейв поднимается до станции: ботинки остаются, лишние прибавки возвращаются деньгами.
+  out.legacyContinues=g.state.saveVersion===5&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321+200&&g.state.upgrades.includes('boots');
   g.setState({saveVersion:3,money:500,shift:1,rep:3,tutorial:true,sound:true,musicVolume:80,best:0,levelsCleared:0,campaignComplete:false,campaignEarnings:0,campaignServed:0});
   g.startShift();
   out.levelFromData=g.shiftConfig.number===1&&g.shiftLength===170&&g.shiftConfig.orderMenu.join()==='coffee'&&g.shiftConfig.allowedEvents.length===0&&g.shiftConfig.queueSize===1;
@@ -741,6 +742,113 @@ const levelTags=await page.evaluate(()=>{const g=window.__nightStation,out={};
   g.closeLevels();
   return out;});
 if(Object.values(levelTags).some(v=>!v))throw new Error(`Level tags failed: ${JSON.stringify(levelTags)}`);
+const stationEconomy=await page.evaluate(async()=>{
+  const g=window.__nightStation,out={};
+  const {UPGRADES,UPGRADE_COUNT,getUpgrade}=await import('/src/content/upgrades.js');
+  const wallet=(money,owned,cleared=20,shift=12)=>g.setState({...g.state,money,upgrades:owned,levelsCleared:cleared,shift});
+
+  // Витрина: всё на месте, дорогое не купить, купленное не купить дважды.
+  wallet(0,[]);
+  g.openStation('menu');
+  out.screenOpens=!document.querySelector('#station').classList.contains('hidden')
+    &&document.querySelectorAll('#station-grid .upgrade').length===UPGRADE_COUNT;
+  out.walletShown=document.querySelector('#station-money').textContent==='₽0';
+  out.poorCannotBuy=!g.buyUpgrade('boots')&&g.state.upgrades.length===0;
+  const boots=getUpgrade('boots');
+  wallet(boots.cost+300,[]);g.renderStation();
+  out.buys=g.buyUpgrade('boots')&&g.state.upgrades.includes('boots')&&g.state.money===300;
+  out.boughtOnce=!g.buyUpgrade('boots')&&g.state.upgrades.filter(id=>id==='boots').length===1;
+  out.savedToDisk=JSON.parse(localStorage.getItem('night-gas-station-save-v1')||'{}')?.upgrades?.includes('boots')===true;
+  // До своей ночи улучшение не продают, даже если денег хватает.
+  wallet(99999,[],0,1);
+  out.lockedNotSold=!g.buyUpgrade('cart')&&!g.state.upgrades.includes('cart');
+  g.closeStation();
+
+  // Третий пост: выкупленный открывается, но не в ночь про аварию.
+  wallet(0,[],20,11);g.startShift();
+  out.bayClosedWithout=g.shiftConfig.pumpsOnline===2&&g.pumps[2].closed===true;
+  wallet(0,['thirdBay'],20,11);g.startShift();
+  out.bayOpenWith=g.shiftConfig.pumpsOnline===3&&g.pumps[2].closed===false;
+  wallet(0,['thirdBay'],20,17);g.startShift();
+  out.bayLockHolds=g.shiftConfig.pumpsOnline===1&&g.pumps[2].closed===true;
+
+  // Прожекторы и щит видно на площадке, а не только в формуле.
+  wallet(0,[],20,11);g.startShift();
+  out.propsHiddenWithout=g.upgradeVisuals.floodlights.every(o=>!o.visible)
+    &&g.upgradeVisuals.roadSign.every(o=>!o.visible)
+    &&g.upgradeVisuals.coffeeBar.every(o=>!o.visible)
+    &&g.upgradeVisuals.cart.every(o=>!o.visible)
+    &&g.floodLights.every(light=>light.intensity===0);
+  const plainPatience=g.shiftConfig.customerPatience,plainInterval=g.shiftConfig.carSpawn.interval[0];
+  wallet(0,['floodlights','roadSign'],20,11);g.startShift();
+  out.propsAppear=g.upgradeVisuals.floodlights.every(o=>o.visible)&&g.upgradeVisuals.roadSign.every(o=>o.visible);
+  out.floodlightsLit=g.floodLights.every(light=>light.intensity>0)&&g.baseHemi>1.9;
+  out.nightChanges=g.shiftConfig.customerPatience>plainPatience&&g.shiftConfig.carSpawn.interval[0]<plainInterval;
+
+  // Вторая кофемашина и скоростные насосы меняют длительность работы.
+  const orderDuration=()=>{
+    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+    g.jobs=g.jobs.filter(j=>j.hidden);g.stock={coffee:5,snack:5,hotdog:5,soda:5};
+    g.shiftConfig={...g.shiftConfig,orderIntensity:1,orderMenu:['coffee']};
+    const car={side:1,patience:60,type:{orders:1,groupChance:0},group:{position:{x:-4.85,y:0,z:-7.4}}};
+    const guest=g.sendCustomer(car,'coffee',0);guest.state='waiting';g.addCounterOrder(guest);
+    const job=g.jobs.find(j=>j.tag==='order-prep');const duration=job?.duration??0;
+    g.jobs=g.jobs.filter(j=>j.hidden);g.clearCustomers();
+    return duration;
+  };
+  wallet(0,[],20,14);g.startShift();const slowCoffee=orderDuration();
+  wallet(0,['coffeeBar'],20,14);g.startShift();const fastCoffee=orderDuration();
+  out.coffeeBarIsFaster=slowCoffee>0&&fastCoffee<slowCoffee*.75;
+  out.secondMachineVisible=g.upgradeVisuals.coffeeBar.every(o=>o.visible);
+
+  const fuelDuration=()=>{
+    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.jobs=g.jobs.filter(j=>j.hidden);
+    g.pumps.forEach(p=>{p.car=null;p.departingCar=null});
+    g.shiftConfig={...g.shiftConfig,fleet:{car:1},orderIntensity:0};
+    g.spawnCar();const car=g.cars.at(-1);
+    for(let i=0;i<3000&&car.status!=='waiting';i++)g.updateCars(.05);
+    const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup');
+    if(!pickup)return 0;
+    g.removeJob(pickup);pickup.onComplete();
+    const action=g.jobs.find(j=>j.car===car&&j.kind==='fuel');const duration=action?.duration??0;
+    g.returnFuelHose(car);g.jobs=g.jobs.filter(j=>j.hidden);
+    g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.pumps.forEach(p=>{p.car=null;p.departingCar=null});
+    return duration;
+  };
+  wallet(0,[],20,14);g.startShift();const slowFuel=fuelDuration();
+  wallet(0,['fastPumps'],20,14);g.startShift();const fastFuel=fuelDuration();
+  out.fastPumpsAreFaster=slowFuel>0&&fastFuel>0&&fastFuel<slowFuel*.8;
+
+  // Тележка: один подъём вместо четырёх.
+  wallet(0,['cart'],20,14);g.startShift();
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();
+  g.stock={coffee:0,snack:0,hotdog:2,soda:5};g.updateHud();
+  out.cartVisible=g.upgradeVisuals.cart.every(o=>o.visible);
+  g.createRestockJob('coffee');
+  const pick=g.jobs.find(j=>j.tag==='restock-coffee-pick');
+  out.cartPickExists=!!pick;
+  g.removeJob(pick);pick.onComplete();
+  out.cartLoaded=g.carry==='cart'&&g.cartLoad.length===3&&g.hands.current==='cart';
+  const put=g.jobs.find(j=>j.tag==='restock-cart-put');
+  out.cartHasOneTrip=!!put&&!g.jobs.some(j=>j.tag?.endsWith?.('-put')&&j!==put);
+  g.removeJob(put);put.onComplete();
+  out.cartFillsEverything=g.stock.coffee===5&&g.stock.snack===5&&g.stock.hotdog===5&&g.carry===null;
+  // Без тележки всё как было: одна коробка — один запас.
+  wallet(0,[],20,14);g.startShift();
+  g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0,hotdog:5,soda:5};
+  g.createRestockJob('coffee');
+  const single=g.jobs.find(j=>j.tag==='restock-coffee-pick');
+  g.removeJob(single);single.onComplete();
+  out.plainBoxStillWorks=g.carry==='coffeeBox';
+  const singlePut=g.jobs.find(j=>j.tag==='restock-coffee-put');
+  g.removeJob(singlePut);singlePut.onComplete();
+  out.plainBoxFillsOne=g.stock.coffee===5&&g.stock.snack===0;
+
+  g.carry=null;g.updateCarry();g.jobs=g.jobs.filter(j=>j.hidden);
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  g.setState({...g.state,money:0,upgrades:[],levelsCleared:0,shift:1});
+  return out;});
+if(Object.values(stationEconomy).some(v=>!v))throw new Error(`Station economy failed: ${JSON.stringify(stationEconomy)}`);
 const achievementScreen=await page.evaluate(()=>{const g=window.__nightStation,out={};
   g.setState({saveVersion:4,shift:1,levelsCleared:0,money:0,tutorial:true,sound:true,musicVolume:80,best:0,campaignComplete:false,achievements:[],stats:{}});
   g.showMenu();document.querySelector('#achievements-btn').click();
@@ -925,4 +1033,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();

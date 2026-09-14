@@ -12,13 +12,14 @@ import { MENU, STOCKS, STOCK_IDS, MAX_STOCK, getMenuItem, shelfCount } from './c
 import { VEHICLES, VEHICLE_ASSETS, getVehicle, rollVehicle, queueOffsets } from './content/vehicles.js';
 import { Customer, COATS } from './customers.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_COUNT, achievementStats, achievementProgress, getAchievement, newlyUnlocked } from './content/achievements.js';
+import { UPGRADES, UPGRADE_COUNT, UPGRADE_EFFECTS, getUpgrade, isUpgradeVisible, affordableUpgrades, applyUpgradesToShift } from './content/upgrades.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const ui={
   loading:$('#loading'),loadFill:$('#load-fill'),loadText:$('#loading-text'),menu:$('#menu'),hud:$('#hud'),tasks:$('#tasks'),taskList:$('#task-list'),stockChips:{coffee:$('#coffee-chip'),snack:$('#snack-chip'),hotdog:$('#hotdog-chip'),soda:$('#soda-chip')},stockValues:{coffee:$('#stock-coffee'),snack:$('#stock-snack'),hotdog:$('#stock-hotdog'),soda:$('#stock-soda')},fuelChip:$('#fuel-chip'),stockFuel:$('#stock-fuel'),levelName:$('#level-name'),levelGoal:$('#level-goal'),
   money:$('#money'),rep:$('#reputation'),clock:$('#clock'),shift:$('#shift-label'),prompt:$('#prompt'),promptKey:$('#prompt-key'),promptTitle:$('#prompt-title'),promptSub:$('#prompt-subtitle'),
   progress:$('#progress'),progressFill:$('#progress i'),toasts:$('#toast-zone'),carrying:$('#carrying'),event:$('#event-card'),eventIcon:$('#event-icon'),eventKind:$('#event-kind'),eventTitle:$('#event-title'),eventText:$('#event-text'),
-  tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),campaignComplete:$('#campaign-complete'),levels:$('#levels'),levelGrid:$('#level-grid'),achievements:$('#achievements'),achievementGrid:$('#achievement-grid'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
+  station:$('#station'),stationGrid:$('#station-grid'),tutorial:$('#tutorial'),guide:$('#guide'),pause:$('#pause'),results:$('#results'),campaignComplete:$('#campaign-complete'),levels:$('#levels'),levelGrid:$('#level-grid'),achievements:$('#achievements'),achievementGrid:$('#achievement-grid'),mobile:$('#mobile-controls'),crosshair:$('#crosshair'),lookHint:$('#look-hint')
 };
 const audio=new AudioSystem();
 const isTouch=matchMedia('(pointer:coarse)').matches;
@@ -31,6 +32,9 @@ const VEHICLE_STATE=Object.freeze({ENTERING:'entering',QUEUEING:'queueing',APPRO
 const PLAYER_RADIUS=.36,CUSTOMER_RADIUS=.34,SAFE_MARGIN=.22,VEHICLE_MARGIN=.28,SAFE_APPROACH=12,STALL_LIMIT=6,QUEUE_STALL=10,YIELD_LIMIT=18;
 const GROUND_Y=.26,UPPER_FLOOR_Y=3.68,EYE_HEIGHT=1.62,JUMP_SPEED=4.9,GRAVITY=16.5,RAIN_HEIGHT=15;
 const STAIR={minX:4.98,maxX:6.66,minZ:-2.38,maxZ:3.12},UPPER_LANDING={minX:4.16,maxX:7.1,minZ:2.54,maxZ:4.14},UPPER_ROOM={minX:-4.3,maxX:4.3,minZ:-2.16,maxZ:6.2};
+const CART_SPOT=new THREE.Vector3(0,.95,1.02);
+/* Выкупленное стоит в моделях с самого начала и просто прячется до покупки. */
+const UPGRADE_PARTS={UpgradeCoffee:'coffeeBar',UpgradeLight:'floodlights',UpgradeSign:'roadSign',UpgradeCart:'cart'};
 const MOP_SPOT=new THREE.Vector3(3.7,UPPER_FLOOR_Y+.01,-1.4),TOOL_SPOT=new THREE.Vector3(4.05,4.4,1.3),TOOL_BENCH_Y=4.66;
 // Линия выдачи: покупатели стоят в зале, заказ кладут на прилавок перед ними.
 // Первый покупатель встаёт к кассе, следующие — по краям прилавка и в очередь за ними.
@@ -49,7 +53,7 @@ const STATION_SPOTS={};
 const STOCK_SPOTS={};
 const STOW_NOTE={mop:'Швабра вернулась на место',tools:'Инструменты вернулись в ящик'};
 const NEED_HINT={mop:'Сначала возьмите швабру на складе наверху',tools:'Сначала возьмите инструменты на складе наверху',hose:'Сначала снимите пистолет с нужной колонки',tankerHose:'Сначала возьмите рукав у бензовоза'};
-const CARRY_NAMES={coffee:'Кофе',snack:'Сэндвич',hotdog:'Хот-дог',soda:'Газировка',box:'Коробка товара',coffeeBox:'Запас кофе',snackBox:'Запас сэндвичей',hotdogBox:'Запас хот-догов',sodaBox:'Запас газировки',bag:'Забытая сумка',mop:'Швабра',tools:'Инструменты',hose:'Заправочный пистолет',tankerHose:'Рукав бензовоза'};
+const CARRY_NAMES={coffee:'Кофе',snack:'Сэндвич',hotdog:'Хот-дог',soda:'Газировка',box:'Коробка товара',coffeeBox:'Запас кофе',snackBox:'Запас сэндвичей',hotdogBox:'Запас хот-догов',sodaBox:'Запас газировки',cart:'Тележка с запасом',bag:'Забытая сумка',mop:'Швабра',tools:'Инструменты',hose:'Заправочный пистолет',tankerHose:'Рукав бензовоза'};
 // Реклама на экране результатов даёт надбавку к заработку смены, поэтому кнопка подписывается точной суммой.
 Object.assign(STATION_SPOTS,{coffee:COFFEE_SPOT,food:FOOD_SPOT,grill:GRILL_SPOT,fridge:FRIDGE_SPOT});
 Object.assign(STOCK_SPOTS,SUPPLY_SPOTS);
@@ -63,6 +67,7 @@ const GUIDE_SLIDES=[
   ['Три поста и топливо','Слева работает третий пост: туда встаёт машина, когда первые два заняты. На некоторых уровнях считают топливо в резервуаре — когда оно кончится, заправлять будет нечем. Приедет бензовоз: возьмите у него рукав и слейте топливо в горловину рядом.','tutorial/06-fuel.png'],
   ['Кто приехал','Ночью приезжают не только легковые. Мотоцикл заправляется за пару секунд, но и ждать почти не станет — денег с него мало. Фура стоит у колонки дольше всех и платит вдвое: ей нужен третий пост слева, между колонками под навесом ей не развернуться. Автобус привозит в магазин сразу три заказа и не уедет, пока не обслужат последнего.','tutorial/08-vehicles.png'],
   ['Склад наверху','Всё, чем торгует прилавок, и весь инвентарь лежат на складе второго этажа: выйдите на улицу, поднимитесь по лестнице справа от магазина, и дверь откроется сама. У каждого стеллажа своя лента — кофе, еда, хот-доги, газировка. У самой двери стоят верстак с инструментом и швабра с ведром. Коробку можно взять заранее, пока нет очереди, а инструмент со шваброй — до того, как что-нибудь случится.','tutorial/07-stock.png'],
+  ['Станция растёт','Ночная выручка остаётся на станции. В меню и на экране итогов есть раздел «СТАНЦИЯ»: там за деньги выкупаются вторая кофемашина, прожекторы над площадкой, щит на трассе, скоростные насосы, третий пост навсегда и тележка для коробок. Покупка одна и навсегда — её видно на площадке и слышно по работе, а работать лучше, чем «на зачёт», становится выгодно.','tutorial/09-station.png'],
   ['Цель ночи','У каждого уровня своя цель: обслужить столько-то машин, заработать сумму, удержать репутацию или не упустить клиентов. Прогресс виден в панели дел слева. Если цель не выполнена, уровень можно переиграть — деньги и улучшения остаются.','tutorial/05-goal.png'],
   ['Ночные происшествия','При отключении света вся заправка остановится: поднимитесь на склад за инструментом и почините щиток у левой стены магазина. Входные двери аварийно останутся открыты. Пролитый кофе закрывает прилавок: пока пол липкий, заказы не готовят и не выдают, так что за шваброй придётся идти сразу. Жёлтый ящик «НАХОДКИ» стоит справа от входа.','tutorial/04-events.png']
 ];
@@ -72,7 +77,7 @@ class NightStationGame{
     this.canvas=$('#scene');this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x091820);this.scene.fog=new THREE.FogExp2(0x091820,.022);
     this.camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.08,120);this.camera.position.set(0,1.65,-2.8);this.camera.rotation.order='YXZ';
     this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));this.renderer.setSize(innerWidth,innerHeight);this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.28;
-    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.carQueue=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftConfig=getShiftConfig(1);this.shiftLength=this.shiftConfig.duration;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock={coffee:MAX_STOCK,snack:MAX_STOCK,hotdog:MAX_STOCK,soda:MAX_STOCK};this.fuelMax=null;this.fuelLeft=Infinity;this.fuelWarned=false;this.weather=WEATHER.clear.id;this.baseHemi=1.85;this.carry=null;this.fuelHose=null;this.served=0;this.lost=0;this.shiftStartMoney=0;this.shiftEarned=0;this.scriptedFired=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.closedSigns=[];this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.tanker=null;this.bayHeld=null;this.bayReservedAt=0;this.draining=false;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.upperDoorOpen=0;this.upperDoorParts=[];this.stockVisuals={coffee:[],snack:[],hotdog:[],soda:[]};this.shelfVisuals={coffee:[],snack:[],soda:[],hotdog:[]};this.customers=[];this.notedTypes=new Set();this.powerVisuals=[];this.markerBaseY=.12;this.state=migrateProgress(DEFAULT_PROGRESS);
+    this.clock=new THREE.Clock();this.assets={};this.mode='loading';this.player=null;this.jobs=[];this.cars=[];this.carQueue=[];this.traffic=[];this.pumps=[];this.nearest=null;this.actionHeld=false;this.actionLatched=false;this.actionProgress=0;this.keys={};this.joy={x:0,y:0};this.yaw=0;this.pitch=-.04;this.lookTouch=null;this.jobId=0;this.vehicleId=0;this.taskSignature='';this.guideIndex=0;this.resumeAfterGuide=false;this.elapsed=0;this.shiftConfig=getShiftConfig(1);this.shiftLength=this.shiftConfig.duration;this.spawnTimer=2;this.eventTimer=24;this.trafficTimer=4;this.stock={coffee:MAX_STOCK,snack:MAX_STOCK,hotdog:MAX_STOCK,soda:MAX_STOCK};this.fuelMax=null;this.fuelLeft=Infinity;this.fuelWarned=false;this.weather=WEATHER.clear.id;this.baseHemi=1.85;this.carry=null;this.fuelHose=null;this.served=0;this.lost=0;this.shiftStartMoney=0;this.shiftEarned=0;this.scriptedFired=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.closedSigns=[];this.blackout=false;this.blackoutCarry=null;this.specialVan=null;this.tanker=null;this.bayHeld=null;this.bayReservedAt=0;this.draining=false;this.doorOpen=0;this.doorParts={left:[],right:[]};this.doorGlass=[];this.upperDoorOpen=0;this.upperDoorParts=[];this.stockVisuals={coffee:[],snack:[],hotdog:[],soda:[]};this.shelfVisuals={coffee:[],snack:[],soda:[],hotdog:[]};this.customers=[];this.notedTypes=new Set();this.upgradeVisuals={};this.floodLights=[];this.powerVisuals=[];this.markerBaseY=.12;this.state=migrateProgress(DEFAULT_PROGRESS);
     this.audio=audio;this.hands=new HandView();this.moving=false;this.lastYaw=0;this.lastPitch=0;this.grounded=true;this.jumpHeight=0;this.jumpSpeed=0;this.landDip=0;
     this.setupWorld();this.setupInput();this.setupUI();window.addEventListener('resize',()=>this.resize());document.addEventListener('visibilitychange',()=>this.visibility());
   }
@@ -143,7 +148,7 @@ class NightStationGame{
     const weather=WEATHER[kind]||WEATHER.clear;this.weather=weather.id;
     const density={clear:.022,rain:.031,fog:.055}[weather.id],tint=weather.id==='fog'?0x101f26:0x091820;
     this.scene.fog.density=density;this.scene.fog.color.setHex(tint);this.scene.background.setHex(tint);
-    this.baseHemi=weather.id==='fog'?2.15:weather.id==='rain'?1.6:1.85;
+    this.baseHemi=(weather.id==='fog'?2.15:weather.id==='rain'?1.6:1.85)+(this.has('floodlights')?.38:0);
     this.hemi.intensity=this.blackout?.45:this.baseHemi;
     this.rain.points.visible=weather.id==='rain';
     this.groundMats.forEach(material=>{material.roughness=weather.id==='rain'?.38:.95});
@@ -160,6 +165,7 @@ class NightStationGame{
       if(o.isMesh&&['Canopy','CanopyStripe'].includes(o.name))o.visible=false;
       if(o.isMesh&&o.name.startsWith('CanopyLight'))o.visible=true;
       if(o.isMesh&&(['CoffeePanel','FoodPanel','FridgeLight','GrillPanel','RegisterScreen'].includes(o.name)||o.name.startsWith('CanopyLight')))this.powerVisuals.push(o);
+      for(const [prefix,id] of Object.entries(UPGRADE_PARTS))if(o.isMesh&&o.name.startsWith(prefix))(this.upgradeVisuals[id]??=[]).push(o);
       if(o.isMesh&&o.name==='CoffeePot')this.shelfVisuals.coffee.push(o);
       if(o.isMesh&&o.name.startsWith('Sandwich'))this.shelfVisuals.snack.push(o);
       if(o.isMesh&&o.name.startsWith('FridgeCan'))this.shelfVisuals.soda.push(o);
@@ -169,11 +175,13 @@ class NightStationGame{
       if(o.isMesh&&(o.name==='DoorLeftGlass'||o.name==='DoorRightGlass'))this.doorGlass.push(o);
     });this.station=station;this.scene.add(station);
     const secondFloor=this.assets.second_floor.clone(true);secondFloor.traverse(o=>{
+      for(const [prefix,id] of Object.entries(UPGRADE_PARTS))if(o.isMesh&&o.name.startsWith(prefix))(this.upgradeVisuals[id]??=[]).push(o);
       if(o.isMesh&&['UpperDoor','UpperDoorWindow','UpperDoorHandle'].includes(o.name))this.upperDoorParts.push({object:o,z:o.position.z});
       for(const kind of STOCK_IDS){const prefix=kind[0].toUpperCase()+kind.slice(1)+'Stock';
         if(o.isMesh&&(o.name.startsWith(prefix+'Carton')||o.name.startsWith(prefix+'Band')))this.stockVisuals[kind].push(o)}
     });this.secondFloor=secondFloor;this.scene.add(secondFloor);
     const fridgeLight=new THREE.PointLight(0x8fe6ff,7,4.2,1.9);fridgeLight.position.set(3.85,1.45,4.45);fridgeLight.userData.onIntensity=7;fridgeLight.castShadow=false;this.scene.add(fridgeLight);this.stationLights.push(fridgeLight);
+    for(const x of [-11.4,6.4]){const flood=new THREE.PointLight(0xbfe2ff,0,30,1.4);flood.position.set(x,5.7,-11.2);flood.userData.onIntensity=22;flood.castShadow=false;this.scene.add(flood);this.floodLights.push(flood);this.stationLights.push(flood)}
     const upperLight=new THREE.PointLight(0xffd9a3,18,11,1.7);upperLight.position.set(0,5.45,1.1);upperLight.userData.onIntensity=18;upperLight.castShadow=false;this.scene.add(upperLight);this.stationLights.push(upperLight);
     this.landmarkLabels=[this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-1.95,2.62,.88),1.65),this.createLandmarkLabel('ЕДА','#ffae35',new THREE.Vector3(1.95,2.62,.88),1.65),this.createLandmarkLabel('ГРИЛЬ','#ffae35',new THREE.Vector3(-3.72,2.34,4.45),1.6),this.createLandmarkLabel('ГАЗИРОВКА','#37d5ef',new THREE.Vector3(3.7,2.42,4.45),2.2),this.createLandmarkLabel('ЩИТОК','#ffae35',new THREE.Vector3(-4.02,2.55,1.2),1.8),this.createLandmarkLabel('НАХОДКИ','#37d5ef',new THREE.Vector3(3.98,2.08,-2.05),2.25),this.createLandmarkLabel('КАССА','#f4f2df',new THREE.Vector3(0,2.5,.78),1.5,40),this.createLandmarkLabel('СКЛАД ↑','#ffae35',new THREE.Vector3(5.82,2.62,-2.98),1.8),this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-3.3,5.22,5.45),1.35,42),this.createLandmarkLabel('ЕДА','#ffae35',new THREE.Vector3(-1.1,5.22,5.45),1.25,42),this.createLandmarkLabel('ХОТ-ДОГИ','#ff7a5f',new THREE.Vector3(1.1,5.22,5.45),1.95,36),this.createLandmarkLabel('ГАЗИРОВКА','#63d98a',new THREE.Vector3(3.3,5.22,5.45),2.05,34),this.createLandmarkLabel('ИНСТРУМЕНТЫ','#ffae35',new THREE.Vector3(3.3,5.5,1.3),2.1,34),this.createLandmarkLabel('УБОРКА','#37d5ef',new THREE.Vector3(3.3,5.5,-1.4),1.5,38),this.createLandmarkLabel('ПОСТ 3','#ffae35',new THREE.Vector3(-6.6,3.34,-8.78),1.3,42),this.createLandmarkLabel('РЕЗЕРВУАР','#37d5ef',new THREE.Vector3(-10.2,1.8,-2.4),2.1,36)];
     for(const x of PUMP_SPOTS){const model=this.assets.pump.clone(true);model.position.set(x,.24,SLOT_Z);this.scene.add(model);const pump={x,z:SLOT_Z,model,car:null,broken:false,slotX:x+Math.sign(x)*SLOT_OFFSET,hoseSpot:new THREE.Vector3(x+.72,.25,SLOT_Z-.52),hoseParts:[]};model.traverse(o=>{if(o.name==='Hose'||o.name==='Nozzle')pump.hoseParts.push(o);if(o.isMesh&&o.name==='Display')this.powerVisuals.push(o)});this.pumps.push(pump)}
@@ -181,6 +189,7 @@ class NightStationGame{
     this.player=this.assets.worker.clone(true);this.player.position.set(0,.26,-3.35);this.player.scale.setScalar(.92);this.scene.add(this.player);
     const kit=this.assets.cleaning_kit.clone(true);kit.position.copy(MOP_SPOT);kit.scale.setScalar(.8);this.scene.add(kit);
     this.kit=kit;this.kitMop=[];kit.traverse(o=>{if(o.isMesh&&o.name.startsWith('Mop'))this.kitMop.push(o)});
+    this.applyUpgradeVisuals();
     this.hands.build(this.assets);
     this.camera.lookAt(0,0,-4);ui.loadFill.style.width='100%';
   }
@@ -233,15 +242,18 @@ class NightStationGame{
       ui.campaignComplete.classList.add('hidden');
       this.startShift()
     };
-    $('#reward-btn').onclick=async e=>{const button=e.currentTarget,bonus=this.rewardBonus();button.disabled=true;const success=await showRewarded();if(!success){button.disabled=false;this.toast('Реклама не загрузилась — надбавка не начислена');return}this.state.money+=bonus;this.toast(`Надбавка за смену: <b>+₽${bonus}</b>`);this.updateHud();this.updateUpgradeButtons();saveProgress(this.state);button.classList.add('hidden')};
-    $$('.upgrades button').forEach(b=>b.onclick=()=>this.buyUpgrade(b.dataset.upgrade));
+    $('#reward-btn').onclick=async e=>{const button=e.currentTarget,bonus=this.rewardBonus();button.disabled=true;const success=await showRewarded();if(!success){button.disabled=false;this.toast('Реклама не загрузилась — надбавка не начислена');return}this.state.money+=bonus;this.toast(`Надбавка за смену: <b>+₽${bonus}</b>`);this.updateHud();this.updateStationTeaser();saveProgress(this.state);button.classList.add('hidden')};
+    $('#station-btn').onclick=()=>this.openStation('menu');
+    $('#station-close').onclick=()=>this.closeStation();
+    $('#results-station').onclick=()=>this.openStation('results');
+    ui.stationGrid.onclick=event=>{const card=event.target.closest('[data-upgrade]');if(card)this.buyUpgrade(card.dataset.upgrade)};
   }
-  setState(data){if(!data)return;this.state=migrateProgress(data);this.checkAchievements(true);this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
+  setState(data){if(!data)return;this.state=migrateProgress(data);this.checkAchievements(true);this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
   showMenu(){this.mode='menu';this.applyWeather('clear');document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
   prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(this.state.playMode===PLAY_MODE.CAMPAIGN)this.state.shift=nextLevel(this.state.levelsCleared);if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
-    this.shiftConfig=getShiftConfig(this.state.shift,this.state.playMode);this.shiftLength=this.shiftConfig.duration;
-    this.clearShift();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.lost=0;this.scriptedFired.clear();this.notedTypes=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.applyLevelSetup();this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.upperDoorOpen=0;this.applyDoorOpen();this.applyUpperDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,GROUND_Y,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');this.announceLevel();this.updateHud();saveProgress(this.state);this.lockPointer()
+    this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;
+    this.clearShift();this.applyUpgradeVisuals();this.addStandJobs();this.mode='playing';this.elapsed=0;this.spawnTimer=this.shiftConfig.carSpawn.initialDelay;this.eventTimer=randomFromRange(this.shiftConfig.eventSpawn.initial);this.trafficTimer=2.5;this.served=0;this.lost=0;this.scriptedFired.clear();this.notedTypes=new Set();this.currentRush=null;this.levelResult=null;this.goalSignature='';this.applyLevelSetup();this.shiftStartMoney=this.state.money;this.blackout=false;this.blackoutCarry=null;this.setBlackout(false);this.doorOpen=0;this.upperDoorOpen=0;this.applyDoorOpen();this.applyUpperDoorOpen();this.yaw=0;this.pitch=-.04;this.camera.fov=72;this.camera.updateProjectionMatrix();this.player.position.set(0,GROUND_Y,-3.35);this.player.visible=false;this.resetJump();ui.hud.classList.remove('hidden');ui.tasks.classList.remove('hidden');ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);ui.mobile.classList.toggle('hidden',!isTouch);ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');this.announceLevel();this.updateHud();saveProgress(this.state);this.lockPointer()
   }
   clearShift(){this.returnFuelHose();for(const c of [...this.cars])this.despawn(c);this.cars=[];this.carQueue=[];for(const t of [...this.traffic])this.despawn(t);this.traffic=[];for(const j of this.jobs)if(j.visual)this.scene.remove(j.visual);this.jobs=[];this.pumps.forEach(p=>{p.car=null;p.departingCar=null;p.broken=false;p.reserved=false});if(this.specialVan){this.despawn(this.specialVan);this.specialVan=null}if(this.tanker){this.despawn(this.tanker);this.tanker=null}this.clearCustomers();this.bayHeld=null;this.draining=false;this.carry=null;this.blackoutCarry=null;this.kitMop?.forEach(m=>m.visible=true);this.updateCarry()}
   update(dt){
@@ -274,7 +286,7 @@ class NightStationGame{
   updateDoors(dt){if(!this.player)return;const atDoor=position=>Math.abs(position.x)<2.1&&Math.abs(position.z+2.65)<2.45,nearby=atDoor(this.player.position)||this.customers.some(customer=>atDoor(customer.position)),target=this.blackout||nearby?1:0,speed=2.8*dt;this.doorOpen=THREE.MathUtils.clamp(this.doorOpen+(target>this.doorOpen?speed:-speed),0,1);this.applyDoorOpen();const upperNearby=this.player.position.y>2.6&&Math.abs(this.player.position.x-4.55)<1.65&&Math.abs(this.player.position.z-3.15)<1.65,upperTarget=upperNearby?1:0;this.upperDoorOpen=THREE.MathUtils.clamp(this.upperDoorOpen+(upperTarget>this.upperDoorOpen?speed:-speed),0,1);this.applyUpperDoorOpen()}
   updatePlayer(dt){
     let strafe=(this.keys.KeyD?1:0)-(this.keys.KeyA?1:0)+this.joy.x,forward=(this.keys.KeyW?1:0)-(this.keys.KeyS?1:0)-this.joy.y;const len=Math.hypot(strafe,forward);let moving=false;
-    if(len>.05){strafe/=Math.max(1,len);forward/=Math.max(1,len);const run=this.keys.ShiftLeft||this.keys.ShiftRight?1.55:1,speed=(4.35+this.state.upgrades.speed*.52)*run,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rx=Math.cos(this.yaw),rz=-Math.sin(this.yaw),dx=(rx*strafe+fx*forward)*speed*dt,dz=(rz*strafe+fz*forward)*speed*dt;const nextX=this.player.position.x+dx,nextZ=this.player.position.z+dz,stuck=this.isBlocked(this.player.position.x,this.player.position.z,null,this.player.position.y),xFloor=this.floorHeight(nextX,this.player.position.z,this.player.position.y),xLevel=this.player.position.y>1&&xFloor===GROUND_Y?this.player.position.y:xFloor;if(stuck||!this.isBlocked(nextX,this.player.position.z,null,xLevel))this.player.position.x=nextX;const zFloor=this.floorHeight(this.player.position.x,nextZ,this.player.position.y),zLevel=this.player.position.y>1&&zFloor===GROUND_Y?this.player.position.y:zFloor;if(stuck||!this.isBlocked(this.player.position.x,nextZ,null,zLevel))this.player.position.z=nextZ;moving=true}
+    if(len>.05){strafe/=Math.max(1,len);forward/=Math.max(1,len);const run=this.keys.ShiftLeft||this.keys.ShiftRight?1.55:1,speed=4.35*(this.has('boots')?UPGRADE_EFFECTS.bootsSpeed:1)*run,fx=-Math.sin(this.yaw),fz=-Math.cos(this.yaw),rx=Math.cos(this.yaw),rz=-Math.sin(this.yaw),dx=(rx*strafe+fx*forward)*speed*dt,dz=(rz*strafe+fz*forward)*speed*dt;const nextX=this.player.position.x+dx,nextZ=this.player.position.z+dz,stuck=this.isBlocked(this.player.position.x,this.player.position.z,null,this.player.position.y),xFloor=this.floorHeight(nextX,this.player.position.z,this.player.position.y),xLevel=this.player.position.y>1&&xFloor===GROUND_Y?this.player.position.y:xFloor;if(stuck||!this.isBlocked(nextX,this.player.position.z,null,xLevel))this.player.position.x=nextX;const zFloor=this.floorHeight(this.player.position.x,nextZ,this.player.position.y),zLevel=this.player.position.y>1&&zFloor===GROUND_Y?this.player.position.y:zFloor;if(stuck||!this.isBlocked(this.player.position.x,nextZ,null,zLevel))this.player.position.z=nextZ;moving=true}
     this.player.position.y=this.floorHeight(this.player.position.x,this.player.position.z,this.player.position.y);
     this.moving=moving;this.updateJump(dt);
     const bob=moving&&this.grounded?Math.sin(this.elapsed*11)*.035:0;
@@ -591,7 +603,7 @@ class NightStationGame{
     const number=this.pumps.indexOf(car.pump)+1,pickup=this.addJob({car,kind:'hose-pickup',title:`Возьмите пистолет колонки ${number}`,sub:car.hurry?'Клиент торопится — шланг с колонки и бегом':`У колонки ${number} ждёт ${car.type.name}`,pos:()=>car.pump.hoseSpot,duration:.65,patience,onFail:()=>this.loseCustomer(car),onComplete:()=>{if(!this.freeHands()||car.status===VEHICLE_STATE.LEAVING||car.pump.car!==car)return false;const left=Math.max(10,pickup.patience||car.patience);this.takeFuelHose(car);this.addFuelAction(car,left)}});car.job=pickup
   }
   addFuelAction(car,patience){
-    car.job=this.addJob({car,kind:'fuel',need:'hose',title:`Заправьте ${car.type.accusative}`,sub:`Подойдите к лючку · колонка ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:car.type.fuelTime,patience,onFail:()=>{this.returnFuelHose(car);this.loseCustomer(car)},onComplete:()=>{this.returnFuelHose(car);car.status=VEHICLE_STATE.WAITING;this.useFuel();const gain=this.payout(Math.round((75+this.shiftConfig.number*4)*car.type.payout),car);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);this.track('refuels');car.fueled=true;this.releaseCar(car)}})
+    car.job=this.addJob({car,kind:'fuel',need:'hose',title:`Заправьте ${car.type.accusative}`,sub:`Подойдите к лючку · колонка ${this.pumps.indexOf(car.pump)+1}`,pos:()=>car.spot,duration:car.type.fuelTime*(this.has('fastPumps')?UPGRADE_EFFECTS.fuelSpeed:1),patience,onFail:()=>{this.returnFuelHose(car);this.loseCustomer(car)},onComplete:()=>{this.returnFuelHose(car);car.status=VEHICLE_STATE.WAITING;this.useFuel();const gain=this.payout(Math.round((75+this.shiftConfig.number*4)*car.type.payout),car);this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.04);audio.success();this.toast(`Полный бак <b>+₽${gain}</b>`);this.track('refuels');car.fueled=true;this.releaseCar(car)}})
   }
   takeFuelHose(car){this.fuelHose={pump:car.pump,car};car.pump.hoseParts.forEach(o=>o.visible=false);this.carry='hose';this.updateCarry();this.updateFuelHoseVisual();audio.tone(240,.12,'square',.1)}
   returnFuelHose(car=null){
@@ -640,7 +652,7 @@ class NightStationGame{
     this.toast(`У прилавка просят <b>${item.accusative}</b>`);audio.tone(520,.1,'triangle',.1);
     this.addJob({customer,car:customer.car,kind:'order',tag:'order-prep',priority:1,
       title:`Приготовьте ${item.accusative}`,sub:`Заказ у прилавка · ${stock.chip} ${this.stock[item.stock]}/${MAX_STOCK}`,
-      pos:()=>STATION_SPOTS[item.station],duration:item.prep,patience:this.orderPatience(customer,.9),
+      pos:()=>STATION_SPOTS[item.station],duration:item.prep*(item.id==='coffee'&&this.has('coffeeBar')?UPGRADE_EFFECTS.coffeeSpeed:1),patience:this.orderPatience(customer,.9),
       onFail:()=>this.loseCustomer(customer.car),
       onComplete:()=>{
         if(!this.freeHands())return false;
@@ -656,7 +668,7 @@ class NightStationGame{
       onComplete:()=>{
         if(this.carry!==item.carry)return false;
         this.carry=null;this.updateCarry();
-        const gain=this.payout(item.price+(item.id==='coffee'?this.state.upgrades.coffee*15:0),customer.car);
+        const gain=this.payout(item.price,customer.car);
         this.state.money+=gain;this.state.rep=Math.min(5,this.state.rep+.08);
         this.track(item.track);audio.success();this.toast(`Заказ выдан <b>+₽${gain}</b>`);
         this.sendCustomerBack(customer,true);
@@ -714,9 +726,27 @@ class NightStationGame{
   takeSupplyBox(kind){
     if(this.stock[kind]>=MAX_STOCK){this.toast(STOCKS[kind].full);return false}
     if(!this.freeHands())return false;
+    // С тележкой наверх ходят один раз за ночь: грузят всё, что кончилось.
+    if(this.has('cart')){
+      this.cartLoad=STOCK_IDS.filter(id=>this.stock[id]<MAX_STOCK);
+      this.carry='cart';this.cartLoad.forEach(id=>this.setStockVisual(id,false));this.updateCarry();audio.tone(280,.12,'square',.13);
+      this.jobs.filter(job=>typeof job.tag==='string'&&job.tag.startsWith('restock-')&&job.tag.endsWith('-pick')).forEach(job=>this.removeJob(job));
+      this.addCartDelivery();return true
+    }
     this.carry=this.supplyCarry(kind);this.setStockVisual(kind,false);this.updateCarry();audio.tone(300,.1,'square',.12);
     this.jobs.filter(j=>j.tag===`restock-${kind}-pick`).forEach(j=>this.removeJob(j));
     this.addSupplyDelivery(kind);return true
+  }
+  addCartDelivery(){
+    const tag='restock-cart-put',kinds=this.cartLoad||[];
+    if(!kinds.length||this.jobs.some(job=>job.tag===tag))return;
+    this.addJob({tag,priority:2,title:'Разгрузите тележку',sub:`Вниз, к прилавку · коробок: ${kinds.length}`,pos:()=>CART_SPOT,duration:2.2,onComplete:()=>{
+      if(this.carry!=='cart')return false;
+      this.carry=null;this.cartLoad=[];
+      for(const id of kinds){this.stock[id]=MAX_STOCK;this.setStockVisual(id,true)}
+      this.renderShelves();this.updateCarry();this.updateHud();
+      this.state.money+=20*kinds.length;this.toast(`Тележка разгружена: <b>${kinds.length}</b> запаса`);audio.success();this.track('restocks');
+    }})
   }
   returnSupplyBox(kind){this.carry=null;this.setStockVisual(kind,true);this.updateCarry();this.jobs.filter(j=>j.tag===`restock-${kind}-put`).forEach(j=>this.removeJob(j));audio.tone(220,.1,'square',.1)}
   addSupplyDelivery(kind){
@@ -756,7 +786,7 @@ class NightStationGame{
     for(const car of this.cars)if(car.status===VEHICLE_STATE.FUELING&&(nearest?.kind!=='fuel'||nearest.car!==car||!this.actionHeld||missing||poweredOff||dry||this.actionLatched))car.status=VEHICLE_STATE.WAITING;
     if(nearest?.kind==='fuel'&&nearest.car?.status!==VEHICLE_STATE.LEAVING)nearest.car.status=this.actionHeld&&!missing&&!poweredOff&&!dry&&!this.actionLatched?VEHICLE_STATE.FUELING:VEHICLE_STATE.WAITING;
     this.draining=nearest?.tag==='tanker-fill'&&this.actionHeld&&!missing&&!this.actionLatched;
-    if(nearest&&this.actionHeld&&!missing&&!poweredOff&&!messy&&!dry&&!this.actionLatched){this.actionProgress+=dt*(1+this.state.upgrades.service*.15);nearest.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);nearest?.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.add('hidden')}
+    if(nearest&&this.actionHeld&&!missing&&!poweredOff&&!messy&&!dry&&!this.actionLatched){this.actionProgress+=dt;nearest.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);nearest?.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.add('hidden')}
   }
   triggerEvent(){
     const options=this.shiftConfig.allowedEvents.filter(type=>this.canRunEvent(type));
@@ -930,6 +960,48 @@ class NightStationGame{
     if(passed&&this.lost===0){this.state.stats.flawless++;if(this.shiftConfig.exam)this.state.stats.flawlessExams++}
     this.checkAchievements()
   }
+  /* Станция — это витрина того, что уже заработано: сколько в кассе,
+     что открыто, что ещё рано. Покупка одна и навсегда. */
+  openStation(from='menu'){
+    audio.ensure();this.stationReturn=from;
+    ui.menu.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');
+    this.renderStation();ui.station.classList.remove('hidden')
+  }
+  closeStation(){
+    ui.station.classList.add('hidden');
+    if(this.stationReturn==='results')ui.results.classList.remove('hidden');
+    else if(this.stationReturn==='campaign')this.showCampaignComplete();
+    else this.showMenu()
+  }
+  renderStation(){
+    const owned=new Set(this.state.upgrades),cleared=this.state.levelsCleared;
+    $('#station-progress').textContent=`выкуплено ${owned.size} из ${UPGRADE_COUNT}`;
+    $('#station-money').textContent=`₽${Math.floor(this.state.money)}`;
+    ui.stationGrid.innerHTML=UPGRADES.map(upgrade=>{
+      const bought=owned.has(upgrade.id),visible=isUpgradeVisible(upgrade,cleared);
+      const ready=!bought&&visible&&this.state.money>=upgrade.cost;
+      const state=bought?'owned':!visible?'locked':ready?'ready':'poor';
+      const price=bought?'КУПЛЕНО':!visible?`С ${upgrade.unlock}-й ночи`:`₽${upgrade.cost}`;
+      return `<button class="upgrade ${state}" data-upgrade="${upgrade.id}"${ready?'':' disabled'}><span class="upgrade-icon">${upgrade.icon}</span><div><b>${upgrade.name}</b><small>${upgrade.hint}</small><i>${upgrade.note}</i></div><span class="upgrade-cost">${price}</span></button>`
+    }).join('')
+  }
+  buyUpgrade(id){
+    const upgrade=getUpgrade(id);if(!upgrade)return false;
+    const owned=new Set(this.state.upgrades);
+    if(owned.has(id)||!isUpgradeVisible(upgrade,this.state.levelsCleared)||this.state.money<upgrade.cost)return false;
+    this.state.money-=upgrade.cost;this.state.upgrades=[...this.state.upgrades,id];
+    audio.success();this.toast(`<b>${upgrade.name}</b> — станция стала лучше`);
+    this.applyUpgradeVisuals();this.renderStation();this.updateStationTeaser();this.updateHud();saveProgress(this.state);
+    return true
+  }
+  has(id){return this.state.upgrades.includes(id)}
+  /* Подсказка в итогах: сколько прямо сейчас по карману. */
+  updateStationTeaser(){
+    const ready=affordableUpgrades(this.state).length,teaser=$('#station-teaser'),badge=$('#station-badge');
+    if(!teaser||!badge)return;
+    teaser.innerHTML=ready?`Можно выкупить: ${ready}<small>Заработанное остаётся на станции</small>`:'Посмотреть, что можно выкупить<small>Заработанное остаётся на станции</small>';
+    badge.textContent=ready?`₽${Math.floor(this.state.money)}`:'→';
+  }
   openAchievements(from='menu'){
     audio.ensure();this.achievementsReturn=from;
     ui.menu.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');
@@ -991,6 +1063,17 @@ class NightStationGame{
   }
   /* ─────────── Уровень: подготовка, брифинг, расписание, цель ─────────── */
   queueLimit(){return this.shiftConfig.queueSize+(this.currentRush?this.currentRush.queueBoost:0)}
+  /* Ночь по данным уровня плюс то, что выкуплено: третий пост, свет, щит. */
+  shiftFor(number){return applyUpgradesToShift(getShiftConfig(number,this.state.playMode),this.state.upgrades)}
+  /* Выкупленное видно на площадке, а не только в формулах. */
+  applyUpgradeVisuals(){
+    for(const [id,parts] of Object.entries(this.upgradeVisuals||{})){
+      const on=this.has(id);parts.forEach(object=>object.visible=on);
+    }
+    const lit=this.has('floodlights');
+    for(const flood of this.floodLights){flood.userData.onIntensity=lit?22:0;flood.intensity=this.blackout?0:flood.userData.onIntensity}
+    this.applyWeather(this.weather);
+  }
   applyLevelSetup(){
     const config=this.shiftConfig;
     this.stock={};for(const kind of STOCK_IDS){this.stock[kind]=config.startStock[kind]??MAX_STOCK;this.setStockVisual(kind,true)}
@@ -1068,7 +1151,7 @@ class NightStationGame{
       this.state.shift=Math.min(CAMPAIGN_SHIFT_COUNT,this.shiftConfig.number+1);
       if(this.state.levelsCleared>=CAMPAIGN_SHIFT_COUNT)this.state.campaignComplete=true
     }
-    const upgrades=$('.upgrades');upgrades.classList.toggle('hidden',campaignDone);this.updateUpgradeButtons();
+    const upgrades=$('.upgrades');upgrades.classList.toggle('hidden',campaignDone);this.updateStationTeaser();
     const next=$('#next-shift');next.innerHTML=campaignDone?'ЗАВЕРШИТЬ КАМПАНИЮ <span>→</span>':!campaign?'СЛЕДУЮЩАЯ НОЧЬ <span>→</span>':verdict.passed?'СЛЕДУЮЩИЙ УРОВЕНЬ <span>→</span>':'ПОВТОРИТЬ УРОВЕНЬ <span>↻</span>';
     const reward=$('#reward-btn');reward.textContent=`СМОТРЕТЬ РЕКЛАМУ: +₽${this.rewardBonus()}`;reward.classList.toggle('hidden',!gpState.available);reward.disabled=false;saveProgress(this.state)
   }
@@ -1088,8 +1171,6 @@ class NightStationGame{
     this.mode='campaign-complete';document.exitPointerLock?.();ui.menu.classList.add('hidden');ui.results.classList.add('hidden');ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.campaignComplete.classList.remove('hidden');$('#campaign-money').textContent=`₽${Math.floor(this.state.money)}`;$('#campaign-earned').textContent=`₽${Math.floor(this.state.campaignEarnings)}`;$('#campaign-served').textContent=this.state.campaignServed;$('#campaign-best').textContent=`₽${Math.floor(this.state.best)}`;saveProgress(this.state)
   }
   rewardBonus(){return Math.max(REWARD_MIN,Math.round(this.shiftEarned*REWARD_SHARE))}
-  updateUpgradeButtons(){$$('.upgrades button').forEach(b=>{const costs={speed:200,service:250,coffee:180},lvl=this.state.upgrades[b.dataset.upgrade]||0;b.disabled=lvl>=3||this.state.money<costs[b.dataset.upgrade];b.querySelector('b').textContent=lvl>=3?'МАКС':`₽${costs[b.dataset.upgrade]}`})}
-  buyUpgrade(key){const costs={speed:200,service:250,coffee:180},cost=costs[key];if(this.state.money<cost||(this.state.upgrades[key]||0)>=3)return;this.state.money-=cost;this.state.upgrades[key]=(this.state.upgrades[key]||0)+1;audio.success();this.updateUpgradeButtons();this.updateHud();saveProgress(this.state)}
   pause(){if(this.mode!=='playing')return;this.mode='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');ui.mobile.classList.add('hidden');ui.lookHint.classList.add('hidden');audio.pause(true)}
   resume(){if(this.mode!=='paused')return;this.mode='playing';ui.pause.classList.add('hidden');ui.mobile.classList.toggle('hidden',!isTouch);ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);audio.pause(false);this.lockPointer();this.clock.getDelta()}
   toggleSound(){this.state.sound=!this.state.sound;audio.setMuted(!this.state.sound);$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`;saveProgress(this.state)}

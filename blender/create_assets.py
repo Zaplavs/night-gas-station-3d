@@ -187,6 +187,10 @@ def make_station():
     cube("CoffeeMachine", (-1.95, 1.78, 1.3), (.55, .55, .38), M["charcoal"])
     cube("CoffeePanel", (-1.95, 1.86, .9), (.36, .27, .025), M["cyan"])
     cyl("CoffeePot", (-1.95, 1.58, .83), .19, .32, M["coffee"], 10)
+    # Выкупаемое: вторая кофемашина встаёт рядом с первой.
+    cube("UpgradeCoffeeMachine", (-.75,1.74,1.3), (.42,.51,.36), M["charcoal"])
+    cube("UpgradeCoffeePanel", (-.75,1.82,.92), (.28,.24,.025), M["cyan"])
+    cyl("UpgradeCoffeePot", (-.75,1.55,.86), .16, .3, M["coffee"], 10)
     cube("FoodStation", (1.95, 1.72, 1.3), (.62, .48, .4), M["charcoal"], .08)
     cube("FoodGlass", (1.95, 1.82, .88), (.5, .3, .025), M["glass"], .02)
     cube("FoodPanel", (1.95, 1.42, .86), (.28, .08, .025), M["yellow"], .015)
@@ -258,6 +262,20 @@ def make_station():
     cube("TankSignPost", (-11.5,.95,-2.4), (.06,.45,.06), M["chrome"], .02)
     cube("TankSign", (-11.5,1.55,-2.4), (.06,.34,.52), M["red"], .04)
     cube("TankSignMark", (-11.57,1.55,-2.4), (.02,.2,.3), M["yellow"], .02)
+    # Выкупаемое: прожекторы по краям площадки.
+    for x in (-13.4, 8.4):
+        cube("UpgradeLightMast", (x,3.1,-11.2), (.14,3.1,.14), M["white"])
+        cube("UpgradeLightArm", (x+(1.0 if x < 0 else -1.0),6.05,-11.2), (1.0,.1,.1), M["white"])
+        cube("UpgradeLightHead", (x+(2.0 if x < 0 else -2.0),5.88,-11.2), (.62,.18,.44), M["charcoal"], .05)
+        cube("UpgradeLightGlow", (x+(2.0 if x < 0 else -2.0),5.68,-11.2), (.56,.05,.38), M["cyan"], .02)
+    # Выкупаемое: щит у дороги, из-за которого сворачивают чаще.
+    for x in (15.4, 18.6):
+        cube("UpgradeSignLeg", (x,2.0,-16.4), (.16,2.0,.16), M["chrome"])
+    cube("UpgradeSignPanel", (17.0,4.6,-16.4), (2.5,1.5,.16), M["red"])
+    cube("UpgradeSignFrame", (17.0,4.6,-16.55), (2.62,1.62,.06), M["chrome"], .04)
+    cube("UpgradeSignLamp", (17.0,6.3,-16.5), (2.2,.12,.3), M["cyan"], .03)
+    number_24("UpgradeSign24", (17.0,4.6,-16.62), 1.35)
+
     # Sign and trash bin.
     cube("SignPost", (-6.6,2.2,-5.2), (.12,2.2,.12), M["chrome"])
     cube("RoadSign", (-6.6,4.25,-5.2), (1.15,1.0,.13), M["red"])
@@ -312,6 +330,16 @@ def make_second_floor():
     cube("ToolBoard", (4.4, 5.1, 1.3), (.06, .46, .52), M["red"], .03)
     for z, size in ((.95, .06), (1.3, .09), (1.65, .05)):
         cube("ToolBoardHook", (4.32, 5.12, z), (.02, size, size), M["chrome"], .012)
+
+    # Выкупаемое: тележка у стеллажей — на ней спускают весь запас разом.
+    cube("UpgradeCartDeck", (-2.2,3.98,4.35), (.62,.07,.42), M["chrome"], .03)
+    cube("UpgradeCartFrame", (-2.2,4.42,4.72), (.58,.42,.06), M["chrome"], .03)
+    for x in (-2.72,-1.68):
+        cube("UpgradeCartPost", (x,4.3,4.72), (.05,.36,.05), M["chrome"], .02)
+    for x, z in ((-2.62,4.02),(-1.78,4.02),(-2.62,4.66),(-1.78,4.66)):
+        cyl("UpgradeCartWheel", (x,3.83,z), .11, .07, M["black"], 8, rotation=(0,0,math.pi/2))
+    cube("UpgradeCartBox", (-2.2,4.26,4.32), (.44,.21,.32), M["brown"], .05)
+    cube("UpgradeCartBoxBand", (-2.2,4.26,3.99), (.3,.06,.02), M["yellow"], .015)
 
     # A cleaning nook on the same wall: mop and bucket live upstairs now.
     cube("MopBoard", (4.4, 4.5, -1.4), (.06, .42, .52), M["cyan"], .03)
