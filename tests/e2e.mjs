@@ -1107,6 +1107,52 @@ const mobileLevels=await mobile.evaluate(()=>{const card=document.querySelector(
     scrolls:card.scrollHeight>card.clientHeight};});
 if(Object.values(mobileLevels).some(v=>!v))throw new Error(`Level menu on phone failed: ${JSON.stringify(mobileLevels)}`);
 await mobile.screenshot({path:'artifacts/mobile-levels.png'});
+// Телефон должен именно играться: стик везёт, свайп крутит, кнопка действия работает,
+// а долгий тап не зовёт «копировать/вставить».
+const mobilePlay=await mobile.evaluate(async()=>{
+  const g=window.__nightStation,out={};
+  const fire=(el,type,x,y,id=7)=>el.dispatchEvent(new PointerEvent(type,{pointerId:id,clientX:x,clientY:y,bubbles:true,cancelable:true}));
+  out.noTextSelection=getComputedStyle(document.body).webkitUserSelect==='none'||getComputedStyle(document.body).userSelect==='none';
+  out.contextMenuBlocked=!document.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));
+  out.controlsVisible=!document.querySelector('#mobile-controls').classList.contains('hidden');
+  const joystick=document.querySelector('#joystick'),box=joystick.getBoundingClientRect();
+  const center={x:box.left+box.width/2,y:box.top+box.height/2};
+  const before=g.player.position.clone();
+  fire(joystick,'pointerdown',center.x,center.y);
+  fire(joystick,'pointermove',center.x,center.y-60);
+  out.joystickReads=Math.abs(g.joy.y)>.5;
+  for(let i=0;i<20;i++)g.updatePlayer(.05);
+  out.joystickMoves=g.player.position.distanceTo(before)>.5;
+  fire(joystick,'pointerup',center.x,center.y-60);
+  out.joystickReleases=g.joy.x===0&&g.joy.y===0;
+  // Свайп по правой половине экрана крутит камеру.
+  const canvas=document.querySelector('#scene'),yaw=g.yaw;
+  fire(canvas,'pointerdown',innerWidth*.72,innerHeight*.5,8);
+  fire(canvas,'pointermove',innerWidth*.52,innerHeight*.5,8);
+  fire(canvas,'pointerup',innerWidth*.52,innerHeight*.5,8);
+  out.swipeTurns=Math.abs(g.yaw-yaw)>.2;
+  // Кнопка действия доводит дело до конца: берём швабру на складе.
+  g.player.position.set(3.1,3.68,-1.4);g.yaw=Math.atan2(-(3.7-3.1),-(-1.4+1.4));g.updateInteraction(0);
+  const mop=g.jobs.find(job=>job.tag==='stand-mop');
+  out.actionTargets=g.nearest===mop;
+  const action=document.querySelector('#action-btn');
+  fire(action,'pointerdown',innerWidth*.86,innerHeight*.78,9);
+  for(let i=0;i<80&&g.carry!=='mop';i++)g.updateInteraction(.05);
+  fire(action,'pointerup',innerWidth*.86,innerHeight*.78,9);
+  out.actionButtonWorks=g.carry==='mop';
+  out.actionReleases=g.actionHeld===false;
+  g.carry=null;g.updateCarry();
+  // Экраны открываются и листаются без полосы прокрутки.
+  g.openStation('menu');
+  const station=document.querySelector('#station-grid'),card=document.querySelector('#station .levels-card');
+  const tile=station.querySelector('.upgrade')?.getBoundingClientRect();
+  out.stationFits=!!tile&&tile.width<=innerWidth&&tile.height>=44;
+  out.noScrollbar=getComputedStyle(card).scrollbarWidth==='none'||card.offsetWidth===card.clientWidth;
+  g.closeStation();
+  out.backToGame=document.querySelector('#station').classList.contains('hidden');
+  return out;});
+if(Object.values(mobilePlay).some(v=>!v))throw new Error(`Mobile play failed: ${JSON.stringify(mobilePlay)}`);
+await mobile.screenshot({path:'artifacts/mobile-play.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();

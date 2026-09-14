@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import './style.css';
 import { AudioSystem } from './audio.js';
 import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, gpState, bindAdPause } from './gamepush.js';
 import { HandView } from './hands.js';
@@ -90,7 +89,7 @@ class NightStationGame{
     this.stationLights=[];
     [[-2.5,6,-7.4],[2.5,6,-7.4],[0,4,-.5]].forEach(([x,y,z],i)=>{const intensity=i===2?22:28,l=new THREE.PointLight(i===2?0xffdfad:0xb9efff,intensity,15,1.5);l.position.set(x,y,z);l.userData.onIntensity=intensity;l.castShadow=i===2;l.shadow.mapSize.set(512,512);this.scene.add(l);this.stationLights.push(l)});
     const moon=new THREE.DirectionalLight(0x86a3c5,3.1);moon.position.copy(MOON_DIRECTION).multiplyScalar(24);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-22;moon.shadow.camera.right=22;moon.shadow.camera.top=22;moon.shadow.camera.bottom=-22;this.scene.add(moon);
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(180,180),new THREE.MeshStandardMaterial({color:0x182620,roughness:1}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;this.scene.add(ground);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(240,121),new THREE.MeshStandardMaterial({color:0x182620,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.set(0,0,33.5);ground.receiveShadow=true;this.scene.add(ground);
     // Площадка выросла влево: там открыли третий пост и приёмный пункт топлива.
     const forecourt=new THREE.Mesh(new THREE.PlaneGeometry(24,23),new THREE.MeshStandardMaterial({color:0x263239,roughness:.95}));forecourt.rotation.x=-Math.PI/2;forecourt.position.set(-2.5,.012,-5);forecourt.receiveShadow=true;this.scene.add(forecourt);
     // Трасса тянется дальше, чем видит туман: машины успевают выехать и уехать по дороге.
@@ -101,6 +100,46 @@ class NightStationGame{
     for(let x=-66;x<67;x+=6){const s=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.13),stripeMat);s.rotation.x=-Math.PI/2;s.position.set(x,.035,ROAD.center);this.scene.add(s)}
     for(let x=-66;x<67;x+=8){const e=new THREE.Mesh(new THREE.PlaneGeometry(7.4,.1),edgeMat);e.rotation.x=-Math.PI/2;e.position.set(x,.034,ROAD.center-4.2);this.scene.add(e)}
     for(let x=-60;x<61;x+=10){const p=new THREE.Mesh(new THREE.BoxGeometry(.1,1,.1),postMat);p.position.set(x,.5,ROAD.center-4.9);this.scene.add(p);const r=new THREE.Mesh(new THREE.PlaneGeometry(.09,.16),reflectMat);r.position.set(x,.8,ROAD.center-4.84);this.scene.add(r)}
+    // За трассой — узкий пляж и море. Всё лежит на уровне дороги: с высоты глаз
+    // вода видна только так, любой обрыв вниз её бы спрятал.
+    const sandMat=new THREE.MeshStandardMaterial({color:0x4a422f,roughness:1});
+    const sand=new THREE.Mesh(new THREE.PlaneGeometry(260,5.4),sandMat);
+    sand.rotation.x=-Math.PI/2;sand.position.set(0,.03,-28.7);sand.receiveShadow=true;this.scene.add(sand);
+    const sea=new THREE.Mesh(new THREE.PlaneGeometry(340,140),new THREE.MeshStandardMaterial({color:0x123444,roughness:.13,metalness:.62}));
+    sea.rotation.x=-Math.PI/2;sea.position.set(0,.015,-101.4);this.scene.add(sea);
+    // Прибой: три полосы пены вдоль кромки, чем дальше — тем тише.
+    for(const [z,depth,opacity] of [[-31.5,1.3,.8],[-32.9,.8,.5],[-34.8,.5,.3]]){
+      const foam=new THREE.Mesh(new THREE.PlaneGeometry(250,depth),new THREE.MeshBasicMaterial({color:0xbde4e9,transparent:true,opacity,fog:true}));
+      foam.rotation.x=-Math.PI/2;foam.position.set(0,.024,z);this.scene.add(foam);
+    }
+    // Дорожка от луны лежит в ту же сторону, где луна и нарисована.
+    const moonPath=new THREE.Mesh(new THREE.PlaneGeometry(15,110),new THREE.MeshBasicMaterial({color:0xa8cdea,transparent:true,opacity:.34,blending:THREE.AdditiveBlending,depthWrite:false,fog:true}));
+    moonPath.rotation.x=-Math.PI/2;moonPath.rotation.z=-Math.atan2(MOON_DIRECTION.x,MOON_DIRECTION.z);
+    moonPath.position.set(MOON_DIRECTION.x*-60,.026,MOON_DIRECTION.z*-60-18);this.scene.add(moonPath);
+    // Валуны на песке: берег не должен быть ровным листом.
+    const stoneMat=new THREE.MeshStandardMaterial({color:0x1b211f,roughness:1});
+    for(let i=0;i<18;i++){
+      const stone=new THREE.Mesh(new THREE.DodecahedronGeometry(.3+Math.random()*.75,0),stoneMat);
+      const side=Math.random()<.5?-1:1;
+      stone.position.set(side*(5+Math.random()*76),.2,-26.6-Math.random()*4.4);
+      stone.scale.set(1,.5+Math.random()*.45,1);stone.rotation.y=Math.random()*3;this.scene.add(stone);
+    }
+    // Два буя и далёкий сухогруз: по огням на воде море читается сразу.
+    const buoyMat=new THREE.MeshStandardMaterial({color:0x2a3338,roughness:.8});
+    for(const [x,z,color] of [[-17,-40,0xff5340],[24,-47,0x4ade80]]){
+      const buoy=new THREE.Mesh(new THREE.CylinderGeometry(.45,.6,1.5,8),buoyMat);
+      buoy.position.set(x,.6,z);this.scene.add(buoy);
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.26,8,6),new THREE.MeshBasicMaterial({color,fog:true}));
+      lamp.position.set(x,1.5,z);this.scene.add(lamp);
+    }
+    const hull=new THREE.Mesh(new THREE.BoxGeometry(16,1.8,4),new THREE.MeshStandardMaterial({color:0x10181d,roughness:.9}));
+    hull.position.set(36,.9,-66);this.scene.add(hull);
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(4.4,2.4,3.2),hull.material);
+    deck.position.set(41,2.9,-66);this.scene.add(deck);
+    for(const [x,y] of [[39.6,3.2],[41,3.2],[42.4,3.2]]){
+      const window=new THREE.Mesh(new THREE.PlaneGeometry(.8,.5),new THREE.MeshBasicMaterial({color:0xffd9a3,fog:true}));
+      window.position.set(x,y,-64.35);this.scene.add(window);
+    }
     // Камни и сосны отодвинуты от левого крыла: там теперь работают, а не смотрят на лес.
     const offset=(side,near,far)=>side>0?near+Math.random()*far:-(near+5+Math.random()*far);
     const gravelMat=new THREE.MeshStandardMaterial({color:0x18201d,roughness:1});for(let i=0;i<24;i++){const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.12+Math.random()*.2,0),gravelMat);const side=Math.random()<.5?-1:1;rock.position.set(offset(side,10,15),.13,-5+Math.random()*23);rock.scale.y=.45;this.scene.add(rock)}
@@ -189,7 +228,7 @@ class NightStationGame{
     const fridgeLight=new THREE.PointLight(0x8fe6ff,7,4.2,1.9);fridgeLight.position.set(3.85,1.45,4.45);fridgeLight.userData.onIntensity=7;fridgeLight.castShadow=false;this.scene.add(fridgeLight);this.stationLights.push(fridgeLight);
     for(const x of [-11.4,6.4]){const flood=new THREE.PointLight(0xbfe2ff,0,30,1.4);flood.position.set(x,5.7,-11.2);flood.userData.onIntensity=22;flood.castShadow=false;this.scene.add(flood);this.floodLights.push(flood);this.stationLights.push(flood)}
     const upperLight=new THREE.PointLight(0xffd9a3,18,11,1.7);upperLight.position.set(0,5.45,1.1);upperLight.userData.onIntensity=18;upperLight.castShadow=false;this.scene.add(upperLight);this.stationLights.push(upperLight);
-    this.landmarkLabels=[this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-1.95,2.62,.88),1.65),this.createLandmarkLabel('СЭНДВИЧИ','#ffae35',new THREE.Vector3(1.95,2.62,.88),2.1,38),this.createLandmarkLabel('ГРИЛЬ','#ffae35',new THREE.Vector3(-3.72,2.34,4.45),1.6),this.createLandmarkLabel('ГАЗИРОВКА','#37d5ef',new THREE.Vector3(3.7,2.42,4.45),2.2),this.createLandmarkLabel('ЩИТОК','#ffae35',new THREE.Vector3(-4.02,2.55,1.2),1.8),this.createLandmarkLabel('НАХОДКИ','#37d5ef',new THREE.Vector3(3.98,2.08,-2.05),2.25),this.createLandmarkLabel('КАССА','#f4f2df',new THREE.Vector3(0,2.5,.78),1.5,40),this.createLandmarkLabel('СКЛАД ↑','#ffae35',new THREE.Vector3(5.82,2.62,-2.98),1.8),this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-3.3,5.22,5.45),1.35,42),this.createLandmarkLabel('СЭНДВИЧИ','#ffae35',new THREE.Vector3(-1.1,5.22,5.45),1.95,30),this.createLandmarkLabel('ХОТ-ДОГИ','#ff7a5f',new THREE.Vector3(1.1,5.22,5.45),1.95,36),this.createLandmarkLabel('ГАЗИРОВКА','#63d98a',new THREE.Vector3(3.3,5.22,5.45),2.05,34),this.createLandmarkLabel('ИНСТРУМЕНТЫ','#ffae35',new THREE.Vector3(3.3,5.5,1.3),2.1,34),this.createLandmarkLabel('УБОРКА','#37d5ef',new THREE.Vector3(3.3,5.5,-1.4),1.5,38),this.createLandmarkLabel('ПОСТ 3','#ffae35',new THREE.Vector3(-6.6,4.16,-8.02),1.5,42),this.createLandmarkLabel('РЕЗЕРВУАР','#37d5ef',new THREE.Vector3(-10.2,1.8,-2.4),2.1,36)];
+    this.landmarkLabels=[this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-1.95,2.62,.88),1.65),this.createLandmarkLabel('СЭНДВИЧИ','#ffae35',new THREE.Vector3(1.95,2.62,.88),2.1,38),this.createLandmarkLabel('ГРИЛЬ','#ffae35',new THREE.Vector3(-3.72,2.34,4.45),1.6),this.createLandmarkLabel('ГАЗИРОВКА','#37d5ef',new THREE.Vector3(3.7,2.42,4.45),2.2),this.createLandmarkLabel('ЩИТОК','#ffae35',new THREE.Vector3(-4.02,2.55,1.2),1.8),this.createLandmarkLabel('НАХОДКИ','#37d5ef',new THREE.Vector3(3.98,2.08,-2.05),2.25),this.createLandmarkLabel('КАССА','#f4f2df',new THREE.Vector3(0,2.5,.78),1.5,40),this.createLandmarkLabel('СКЛАД ↑','#ffae35',new THREE.Vector3(5.82,2.62,-2.98),1.8),this.createLandmarkLabel('КОФЕ','#37d5ef',new THREE.Vector3(-3.3,5.22,5.45),1.35,42),this.createLandmarkLabel('СЭНДВИЧИ','#ffae35',new THREE.Vector3(-1.1,5.22,5.45),1.95,30),this.createLandmarkLabel('ХОТ-ДОГИ','#ff7a5f',new THREE.Vector3(1.1,5.22,5.45),1.95,36),this.createLandmarkLabel('ГАЗИРОВКА','#63d98a',new THREE.Vector3(3.3,5.22,5.45),2.05,34),this.createLandmarkLabel('ИНСТРУМЕНТЫ','#ffae35',new THREE.Vector3(3.3,5.5,1.3),2.1,34),this.createLandmarkLabel('УБОРКА','#37d5ef',new THREE.Vector3(3.3,5.5,-1.4),1.5,38),this.createLandmarkLabel('ПОСТ 3','#ffae35',new THREE.Vector3(-6.6,4.16,-8.02),1.5,42),this.createLandmarkLabel('РЕЗЕРВУАР','#37d5ef',new THREE.Vector3(-11.5,2.26,-2.4),2.1,36)];
     for(const x of PUMP_SPOTS){const model=this.assets.pump.clone(true);model.position.set(x,.24,SLOT_Z);this.scene.add(model);const pump={x,z:SLOT_Z,model,car:null,broken:false,slotX:x+Math.sign(x)*SLOT_OFFSET,hoseSpot:new THREE.Vector3(x+.72,.25,SLOT_Z-.52),hoseParts:[]};model.traverse(o=>{if(o.name==='Hose'||o.name==='Nozzle')pump.hoseParts.push(o);if(o.isMesh&&o.name==='Display')this.powerVisuals.push(o)});this.pumps.push(pump)}
     this.closedSigns=this.pumps.map(pump=>{const label=this.createLandmarkLabel('ЗАКРЫТО','#ff5340',new THREE.Vector3(pump.x,3.02,pump.z+1.3),2.1,44);label.visible=false;return label});
     this.player=this.assets.worker.clone(true);this.player.position.set(0,.26,-3.35);this.player.scale.setScalar(.92);this.scene.add(this.player);
@@ -203,9 +242,12 @@ class NightStationGame{
     addEventListener('keydown',e=>{if(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','KeyE','Space'].includes(e.code))e.preventDefault();this.keys[e.code]=true;if(e.code==='KeyE')this.actionHeld=true;if(e.code==='Escape'&&this.mode==='playing')this.pause()});
     addEventListener('keyup',e=>{this.keys[e.code]=false;if(e.code==='KeyE'){this.actionHeld=false;this.actionProgress=0;this.actionLatched=false}});addEventListener('blur',()=>{this.keys={};this.actionHeld=false;this.actionLatched=false;this.joy={x:0,y:0}});
     this.canvas.addEventListener('click',()=>this.lockPointer());
+    // Игра, а не текст: длинный тап не выделяет и не открывает меню копирования.
+    addEventListener('contextmenu',e=>e.preventDefault());
+    addEventListener('selectstart',e=>e.preventDefault());
     addEventListener('mousemove',e=>{if(document.pointerLockElement!==this.canvas||this.mode!=='playing')return;this.yaw-=e.movementX*.0022;this.pitch=THREE.MathUtils.clamp(this.pitch-e.movementY*.0019,-1.35,1.25)});
     document.addEventListener('pointerlockchange',()=>{ui.lookHint.classList.toggle('hidden',isTouch||this.mode!=='playing'||document.pointerLockElement===this.canvas)});
-    this.canvas.addEventListener('pointerdown',e=>{if(!isTouch||this.mode!=='playing'||e.clientX<innerWidth*.32)return;this.lookTouch={id:e.pointerId,x:e.clientX,y:e.clientY};this.canvas.setPointerCapture(e.pointerId)});
+    this.canvas.addEventListener('pointerdown',e=>{if(!isTouch||this.mode!=='playing'||e.clientX<innerWidth*.32)return;this.lookTouch={id:e.pointerId,x:e.clientX,y:e.clientY};try{this.canvas.setPointerCapture(e.pointerId)}catch{}});
     this.canvas.addEventListener('pointermove',e=>{if(!this.lookTouch||e.pointerId!==this.lookTouch.id)return;const dx=e.clientX-this.lookTouch.x,dy=e.clientY-this.lookTouch.y;this.lookTouch.x=e.clientX;this.lookTouch.y=e.clientY;this.yaw-=dx*.006;this.pitch=THREE.MathUtils.clamp(this.pitch-dy*.005,-1.2,1.15)});
     const stopLook=e=>{if(this.lookTouch&&e.pointerId===this.lookTouch.id)this.lookTouch=null};this.canvas.addEventListener('pointerup',stopLook);this.canvas.addEventListener('pointercancel',stopLook);
     const joy=$('#joystick'),nub=$('#joystick i');let joyId=null;const update=e=>{const r=joy.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),len=Math.hypot(x,y)||1,m=Math.min(38,len),nx=x/len,ny=y/len;this.joy={x:nx*m/38,y:ny*m/38};nub.style.transform=`translate(${nx*m}px,${ny*m}px)`};

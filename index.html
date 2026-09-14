@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#071015" />
   <meta name="description" content="Ночная заправка 3D — уютный симулятор ночной смены с необычными посетителями." />
   <title>Ночная заправка 3D</title>
+  <!-- Стиль грузится вместе со страницей: иначе первый кадр успевает мигнуть голой разметкой. -->
+  <link rel="stylesheet" href="/src/style.css" />
+  <style>html,body{margin:0;height:100%;background:#071015;overflow:hidden}</style>
 </head>
 <body>
   <div id="game"><canvas id="scene" aria-label="Игровая сцена"></canvas></div>
