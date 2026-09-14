@@ -108,7 +108,7 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
     level.queueSize, level.pumpsOnline, level.orderIntensity, level.customerPatience,
     level.orderMenu.join('+'), level.startStock.coffee, level.startStock.snack,
     level.allowedEvents.join('+'), level.scripted.length, level.rushes.length,
-    level.weather, level.hurryChance, level.fuelReserve,
+    level.weather, level.hurryChance, level.fuelReserve, level.companions,
   ].join('|');
   check(signature !== seenSignatures[index - 1], `${at}: повторяет предыдущий уровень один в один`);
   seenSignatures.push(signature);
@@ -117,9 +117,13 @@ CAMPAIGN_LEVELS.forEach((level, index) => {
 /* ─── Механики открываются постепенно ─── */
 const firstWith = (predicate) => CAMPAIGN_LEVELS.find(predicate)?.number ?? Infinity;
 const countWith = (predicate) => CAMPAIGN_LEVELS.filter(predicate).length;
-check(CAMPAIGN_LEVELS[0].orderIntensity === 0, 'Первый уровень должен учить только заправке');
+check(CAMPAIGN_LEVELS[0].orderIntensity > 0 && CAMPAIGN_LEVELS[0].orderMenu.join() === 'coffee',
+  'Первая ночь должна учить и заправке, и кофе');
 check(CAMPAIGN_LEVELS[0].allowedEvents.length === 0, 'На первом уровне не должно быть случайных событий');
-check(firstWith((l) => l.orderMenu.includes('coffee')) === 3, 'Кофе должен открываться на 3 уровне');
+check(firstWith((l) => l.orderMenu.includes('coffee')) === 1, 'Кофе должен продаваться с первой ночи');
+check(CAMPAIGN_LEVELS[0].companions === 0, 'В первую ночь из машины выходит только водитель');
+check(firstWith((l) => l.companions > 0) === 2, 'Спутники должны появляться со второй ночи');
+check(firstWith((l) => l.companions >= 1) === 3, 'К третьей ночи из машин выходят вдвоём в полную силу');
 check(firstWith((l) => l.orderMenu.includes('snack')) === 6, 'Еда должна открываться на 6 уровне');
 check(firstWith((l) => l.orderMenu.includes('hotdog')) === 8, 'Хот-доги должны открываться на 8 уровне');
 check(firstWith((l) => l.orderMenu.includes('soda')) === 14, 'Газировка должна открываться на 14 уровне');

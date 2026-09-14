@@ -376,6 +376,10 @@ def make_car():
     bpy.ops.mesh.primitive_torus_add(major_radius=.18, minor_radius=.025, major_segments=10, minor_segments=5,
                                     location=gltf_loc((-.38,1.08,-.63)), rotation=gltf_rotation((math.pi/2,0,0)))
     finish(bpy.context.object, "SteeringWheel", M["charcoal"])
+    # Пассажир справа: он тоже может пойти в магазин, и тогда салон пустеет весь.
+    cyl("Passenger1Torso", (.38,1.05,-.02), .2, .43, M["blue"], 8)
+    sphere("Passenger1Head", (.38,1.37,-.16), (.16,.18,.16), M["skin"])
+    cube("Passenger1Hair", (.38,1.51,-.14), (.16,.055,.15), M["charcoal"], .035)
     cube("FrontBumper", (0,.42,-2.02), (1.0,.18,.09), M["chrome"], .05)
     cube("RearBumper", (0,.42,2.02), (1.0,.18,.09), M["chrome"], .05)
     for x in (-1.02,1.02):
@@ -473,9 +477,9 @@ def make_bus():
     for z in (-2.2,-1.3,-.4,.5,1.4,2.3):
         for x in (-1.24,1.24):
             cube("SideWindow", (x,2.15,z), (.05,.46,.36), M["glass"], .015)
-    for z in (-1.75,-.4,.95,2.3):
-        cyl("Passenger", (-.6,1.72,z), .19, .5, M["blue"], 7)
-        sphere("PassengerHead", (-.6,2.14,z), (.15,.17,.15), M["skin"])
+    for index, z in enumerate((-1.75,-.4,.95,2.3), start=1):
+        cyl(f"Passenger{index}Torso", (-.6,1.72,z), .19, .5, M["blue"], 7)
+        sphere(f"Passenger{index}Head", (-.6,2.14,z), (.15,.17,.15), M["skin"])
     # Водитель автобуса: он тоже человек и тоже ходит за кофе.
     cyl("DriverTorso", (-.62,1.72,-2.9), .2, .5, M["blue"], 8)
     sphere("DriverHead", (-.62,2.12,-3.02), (.16,.18,.16), M["skin"])

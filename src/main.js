@@ -64,7 +64,7 @@ const GUIDE_SLIDES=[
   ['Кто приехал','Ночью приезжают не только легковые. Мотоцикл заправляется за пару секунд, но и ждать почти не станет — денег с него мало. Фура стоит у колонки дольше всех и платит вдвое: ей нужен третий пост слева, между колонками под навесом ей не развернуться. Автобус привозит в магазин сразу три заказа и не уедет, пока не обслужат последнего.','tutorial/08-vehicles.png'],
   ['Склад наверху','Всё, чем торгует прилавок, и весь инвентарь лежат на складе второго этажа: выйдите на улицу, поднимитесь по лестнице справа от магазина, и дверь откроется сама. У каждого стеллажа своя лента — кофе, еда, хот-доги, газировка. У самой двери стоят верстак с инструментом и швабра с ведром. Коробку можно взять заранее, пока нет очереди, а инструмент со шваброй — до того, как что-нибудь случится.','tutorial/07-stock.png'],
   ['Цель ночи','У каждого уровня своя цель: обслужить столько-то машин, заработать сумму, удержать репутацию или не упустить клиентов. Прогресс виден в панели дел слева. Если цель не выполнена, уровень можно переиграть — деньги и улучшения остаются.','tutorial/05-goal.png'],
-  ['Ночные происшествия','При отключении света вся заправка остановится: поднимитесь на склад за инструментом и почините щиток у левой стены магазина. Входные двери аварийно останутся открыты. Для пятна нужна швабра — она тоже на складе, а жёлтый ящик «НАХОДКИ» стоит справа от входа.','tutorial/04-events.png']
+  ['Ночные происшествия','При отключении света вся заправка остановится: поднимитесь на склад за инструментом и почините щиток у левой стены магазина. Входные двери аварийно останутся открыты. Пролитый кофе закрывает прилавок: пока пол липкий, заказы не готовят и не выдают, так что за шваброй придётся идти сразу. Жёлтый ящик «НАХОДКИ» стоит справа от входа.','tutorial/04-events.png']
 ];
 
 class NightStationGame{
@@ -479,19 +479,17 @@ class NightStationGame{
   /* Кто сидит внутри: водитель — одно место, ряды пассажиров автобуса — по одному.
      Ушедший в магазин исчезает из салона и возвращается на своё место. */
   collectSeats(group){
-    const driver=[],rows=new Map();
+    const rows=new Map();
     group.traverse(object=>{
       if(!object.isMesh)return;
-      if(object.name.startsWith('Driver'))driver.push(object);
-      else if(object.name.startsWith('Passenger')){
-        const row=Math.round(object.position.z*10);
-        if(!rows.has(row))rows.set(row,[]);
-        rows.get(row).push(object);
-      }
+      const seat=/^(Driver|Passenger\d*)/.exec(object.name)?.[1];
+      if(!seat)return;
+      if(!rows.has(seat))rows.set(seat,[]);
+      rows.get(seat).push(object);
     });
-    const rowSeats=[...rows.values()];
-    if(driver.length)rowSeats.unshift(driver);
-    return rowSeats.map(meshes=>{
+    // Водитель всегда первый: если из машины выходит один человек, это он.
+    const order=[...rows.keys()].sort((a,b)=>a==='Driver'?-1:b==='Driver'?1:a.localeCompare(b));
+    return order.map(key=>rows.get(key)).map(meshes=>{
       const coat=COATS[Math.floor(Math.random()*COATS.length)];
       for(const mesh of meshes){
         if(!mesh.name.endsWith('Torso'))continue;
@@ -604,10 +602,15 @@ class NightStationGame{
      поэтому магазин и колонка спорят за игрока в одно и то же время. */
   maybeSendCustomer(car){
     if(car.orderDecided)return;car.orderDecided=true;
-    const menu=this.shiftConfig.orderMenu,seats=car.type?.orders??1;
+    const menu=this.shiftConfig.orderMenu,seats=Math.min(car.type?.orders??1,car.seats?.length||1);
     if(!menu.length||!seats||Math.random()>=this.shiftConfig.orderIntensity)return;
-    // Салон выходит целиком: автобус — это сразу три заказа, а не три броска монетки.
-    for(let seat=0;seat<seats;seat++)this.sendCustomer(car,menu[Math.floor(Math.random()*menu.length)],seat);
+    const order=()=>menu[Math.floor(Math.random()*menu.length)];
+    this.sendCustomer(car,order(),0);
+    // Спутники выходят вместе с водителем: у автобуса это весь салон, у легковой — как повезёт.
+    for(let seat=1;seat<seats;seat++){
+      if(Math.random()>=(car.type?.groupChance??0)*(this.shiftConfig.companions??1))break;
+      this.sendCustomer(car,order(),seat);
+    }
   }
   freeCounterSlot(){const taken=new Set(this.customers.map(customer=>customer.slot));return COUNTER_SLOTS.findIndex((_,index)=>!taken.has(index))}
   sendCustomer(car,itemId,seat=0){
@@ -740,17 +743,20 @@ class NightStationGame{
   addJob(spec){const job={id:++this.jobId,created:this.elapsed,duration:1,patience:null,maxPatience:null,...spec};if(job.patience)job.maxPatience=job.patience;this.jobs.push(job);return job}
   removeJob(job){const i=this.jobs.indexOf(job);if(i>=0)this.jobs.splice(i,1);if(job.visual)this.scene.remove(job.visual);if(this.nearest===job){this.nearest=null;this.actionProgress=0}}
   worksDuringBlackout(job){return !this.blackout||job?.tag==='blackout'||job?.tag==='stand-tools'}
-  updateJobs(dt){for(const j of [...this.jobs]){if(j.patience!=null&&this.worksDuringBlackout(j)){j.patience-=dt;if(j.patience<=0){this.removeJob(j);j.onFail?.()}}}this.renderTasks()}
+  /* Липкий пол — это закрытый прилавок: пока пятно не убрано, заказы не готовят
+     и не выдают. Терпение таких заказов на это время замирает — вины клиента тут нет. */
+  shopBlocked(job){return job?.kind==='order'&&this.jobs.some(other=>other.tag==='spill')}
+  updateJobs(dt){for(const j of [...this.jobs]){if(j.patience!=null&&this.worksDuringBlackout(j)&&!this.shopBlocked(j)){j.patience-=dt;if(j.patience<=0){this.removeJob(j);j.onFail?.()}}}this.renderTasks()}
   renderTasks(){const shown=this.jobs.filter(j=>!j.hidden).sort((a,b)=>(b.priority||0)-(a.priority||0)||a.created-b.created).slice(0,5),signature=shown.map(j=>j.id).join(',')+'|'+(this.nearest?.id||0);if(signature!==this.taskSignature){this.taskSignature=signature;ui.taskList.innerHTML=shown.map((j,i)=>`<div class="task ${j===this.nearest?'active':''}" data-job="${j.id}"><span class="num">0${i+1}</span><b>${this.jobLabel(j)}</b><small>${j.sub||''}</small>${j.patience!=null?'<div class="patience"><i></i></div>':''}</div>`).join('')||'<div class="task"><span class="num">✓</span><b>Всё спокойно</b><small>Осмотритесь вокруг</small></div>'}for(const j of shown){if(j.patience==null)continue;const bar=ui.taskList.querySelector(`[data-job="${j.id}"] .patience i`);if(bar)bar.style.width=`${Math.max(0,j.patience/j.maxPatience*100)}%`}}
   updateInteraction(dt){
     let nearest=null,best=2.15;for(const j of this.jobs){const p=j.pos(),py=p.y??GROUND_Y;let d=Math.hypot(p.x-this.player.position.x,p.z-this.player.position.z,py-this.player.position.y);if(j.hidden)d+=.85;if(j.need&&this.carry===j.need)d-=.5;if(d<best){best=d;nearest=j}}
     if(nearest!==this.nearest){this.nearest?.onProgress?.(0);this.nearest=nearest;this.actionProgress=0}
-    const poweredOff=nearest&&!this.worksDuringBlackout(nearest),dry=!!nearest&&this.needsFuel(nearest)&&!this.hasFuel(),missing=nearest&&nearest.need&&this.carry!==nearest.need?nearest.need:null;
-    this.marker.visible=!!nearest;if(nearest){const p=nearest.pos();this.marker.position.x=p.x;this.marker.position.z=p.z;this.markerBaseY=(p.y??GROUND_Y)-.08;ui.prompt.classList.remove('hidden');ui.promptKey.textContent=isTouch?'●':'E';ui.promptTitle.textContent=this.jobLabel(nearest);ui.promptSub.textContent=poweredOff?'Нет электричества — сначала почините щиток':dry?'В резервуаре пусто — ждите бензовоз':missing?NEED_HINT[missing]:'Удерживайте для действия'}else ui.prompt.classList.add('hidden');
+    const poweredOff=nearest&&!this.worksDuringBlackout(nearest),messy=!!nearest&&this.shopBlocked(nearest),dry=!!nearest&&this.needsFuel(nearest)&&!this.hasFuel(),missing=nearest&&nearest.need&&this.carry!==nearest.need?nearest.need:null;
+    this.marker.visible=!!nearest;if(nearest){const p=nearest.pos();this.marker.position.x=p.x;this.marker.position.z=p.z;this.markerBaseY=(p.y??GROUND_Y)-.08;ui.prompt.classList.remove('hidden');ui.promptKey.textContent=isTouch?'●':'E';ui.promptTitle.textContent=this.jobLabel(nearest);ui.promptSub.textContent=poweredOff?'Нет электричества — сначала почините щиток':messy?'Липкий пол — сначала уберите пятно':dry?'В резервуаре пусто — ждите бензовоз':missing?NEED_HINT[missing]:'Удерживайте для действия'}else ui.prompt.classList.add('hidden');
     for(const car of this.cars)if(car.status===VEHICLE_STATE.FUELING&&(nearest?.kind!=='fuel'||nearest.car!==car||!this.actionHeld||missing||poweredOff||dry||this.actionLatched))car.status=VEHICLE_STATE.WAITING;
     if(nearest?.kind==='fuel'&&nearest.car?.status!==VEHICLE_STATE.LEAVING)nearest.car.status=this.actionHeld&&!missing&&!poweredOff&&!dry&&!this.actionLatched?VEHICLE_STATE.FUELING:VEHICLE_STATE.WAITING;
     this.draining=nearest?.tag==='tanker-fill'&&this.actionHeld&&!missing&&!this.actionLatched;
-    if(nearest&&this.actionHeld&&!missing&&!poweredOff&&!dry&&!this.actionLatched){this.actionProgress+=dt*(1+this.state.upgrades.service*.15);nearest.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);nearest?.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.add('hidden')}
+    if(nearest&&this.actionHeld&&!missing&&!poweredOff&&!messy&&!dry&&!this.actionLatched){this.actionProgress+=dt*(1+this.state.upgrades.service*.15);nearest.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.remove('hidden');ui.progressFill.style.width=`${Math.min(100,this.actionProgress/nearest.duration*100)}%`;if(this.actionProgress>=nearest.duration){this.actionProgress=0;this.actionLatched=true;const ok=nearest.onComplete?.();if(ok!==false)this.removeJob(nearest)}}else{this.actionProgress=Math.max(0,this.actionProgress-dt*2.5);nearest?.onProgress?.(Math.min(1,this.actionProgress/nearest.duration));ui.progress.classList.add('hidden')}
   }
   triggerEvent(){
     const options=this.shiftConfig.allowedEvents.filter(type=>this.canRunEvent(type));
@@ -779,7 +785,7 @@ class NightStationGame{
     if(!fits)p.set(2.4,.255,-1.9);
     const visual=new THREE.Group(),coffee=new THREE.MeshBasicMaterial({color:0x6b2f1b,transparent:true,opacity:.94,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),shine=new THREE.MeshBasicMaterial({color:0xc7783e,transparent:true,opacity:.7,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3});
     [[0,0,.68,coffee],[-.48,.08,.28,coffee],[.43,-.18,.22,coffee],[.14,.3,.13,shine],[-.2,-.13,.09,shine]].forEach(([x,z,r,material],i)=>{const drop=new THREE.Mesh(new THREE.CircleGeometry(r,12),material);drop.name=i?'CoffeeDrop':'CoffeeSpill';drop.rotation.x=-Math.PI/2;drop.position.set(x,i*.001,z);drop.scale.set(1,i?.68:.82,1);drop.renderOrder=3;visual.add(drop)});visual.position.copy(p);this.scene.add(visual);
-    this.eventNotice('≋','Кто-то разлил кофе','В зале липкий пол. Швабра с ведром стоит на складе, у двери.');this.addJob({tag:'spill',need:'mop',title:'Уберите пятно',sub:'Швабра — на складе, у двери',pos:()=>p,duration:2.2,visual,onProgress:value=>{const size=Math.max(.12,1-value*.88);visual.scale.setScalar(size);visual.children.forEach((drop,i)=>drop.material.opacity=(i>2?.7:.94)*(.45+.55*(1-value)))},onComplete:()=>{this.state.money+=45;this.toast('Чисто! <b>+₽45</b>');audio.success();this.stowTool();this.track('spills')}})
+    this.eventNotice('≋','Кто-то разлил кофе','Пока пол липкий, за прилавком не обслуживают. Швабра с ведром стоит на складе, у двери.');this.addJob({tag:'spill',priority:4,need:'mop',title:'Уберите пятно',sub:'Швабра — на складе, у двери',pos:()=>p,duration:2.2,visual,onProgress:value=>{const size=Math.max(.12,1-value*.88);visual.scale.setScalar(size);visual.children.forEach((drop,i)=>drop.material.opacity=(i>2?.7:.94)*(.45+.55*(1-value)))},onComplete:()=>{this.state.money+=45;this.toast('Чисто! <b>+₽45</b>');audio.success();this.stowTool();this.track('spills')}})
   }
   /* Лужа должна целиком лежать на полу зала, не залезая под прилавок и витрины. */
   spillFits(p){

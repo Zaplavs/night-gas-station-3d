@@ -5,6 +5,8 @@
 
 const define = (spec) => Object.freeze({
   orders: 1,
+  /* Шанс, что вслед за первым в магазин пойдут и остальные из салона. */
+  groupChance: 0,
   big: false,
   hatch: 0,
   park: 0,
@@ -19,7 +21,7 @@ export const VEHICLES = Object.freeze({
   car: define({
     id: 'car', asset: 'car', name: 'легковая', accusative: 'машину', tag: 'легковые', stat: null,
     halfWidth: 1.18, halfLength: 2.2,
-    fuelTime: 2.7, payout: 1, patience: 1, orders: 1,
+    fuelTime: 2.7, payout: 1, patience: 1, orders: 2, groupChance: 0.45,
     paint: [0xb52f28, 0x2e6380, 0xd0a343, 0x4f555b, 0x315d3f, 0x8d8f92, 0x2a2f35],
     lights: {}, engine: [105, 0.35],
     note: '',
@@ -47,7 +49,7 @@ export const VEHICLES = Object.freeze({
     id: 'bus', asset: 'bus', name: 'автобус', accusative: 'автобус', tag: 'автобусы', stat: 'buses',
     halfWidth: 1.25, halfLength: 3.45, hatch: -1.4, park: -0.7, big: true,
     // Пока идёт заправка, у прилавка стоит целый салон.
-    fuelTime: 3.6, payout: 1.5, patience: 1.3, orders: 3,
+    fuelTime: 3.6, payout: 1.5, patience: 1.3, orders: 3, groupChance: 1,
     paint: [0xd8a52c, 0xd4d7d2, 0x2e6380, 0xb8562c],
     lights: { front: -3.4, back: 3.4, width: 1.05, y: 0.95 }, engine: [88, 0.45],
     note: 'Автобус: пока стоит под заправкой, из него выйдет целый салон.',

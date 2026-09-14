@@ -9,11 +9,11 @@ await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
-// Старые сценарии написаны про легковые: пока тест не попросит другого состава,
-// поток состоит из них — иначе фура уедет на третий пост мимо очереди.
+// Старые сценарии написаны про легковые без магазина: пока тест не попросит другого,
+// поток состоит из них — иначе фура уедет мимо очереди, а машина не уедет без покупателя.
 await page.evaluate(()=>{const g=window.__nightStation,start=g.startShift.bind(g);
-  g.startShift=(...args)=>{start(...args);g.shiftConfig={...g.shiftConfig,fleet:g.testFleet||{car:1}}};
-  g.shiftConfig={...g.shiftConfig,fleet:{car:1}}});
+  g.startShift=(...args)=>{start(...args);g.shiftConfig={...g.shiftConfig,fleet:g.testFleet||{car:1},orderIntensity:g.testOrders??0}};
+  g.shiftConfig={...g.shiftConfig,fleet:{car:1},orderIntensity:0}});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
 const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[],canopyCaps=[],shelves=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));g.station.traverse(o=>{if(o.isMesh&&o.name.startsWith('CanopyLight')&&o.visible)canopyCaps.push(o.name);if(o.isMesh&&o.name.startsWith('ShelfFrame'))shelves.push(o)});const glass=g.assets.car.getObjectByName('FrontWindow'),trash=g.station.getObjectByName('TrashBin'),landmarks=['CoffeeMachine','FoodStation','GrillBase','FridgeBack','FuseFrame','LostAndFound'].map(name=>g.station.getObjectByName(name)),reachable=o=>{if(!o)return false;const p=o.position;for(let r=.7;r<2;r+=.2)for(let i=0;i<20;i++){const a=i/20*Math.PI*2;if(!g.isBlocked(p.x+Math.cos(a)*r,p.z+Math.sin(a)*r))return true}return false};return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,1.15)&&!g.isBlocked(0,-1),hall:!g.isBlocked(-1.85,-.28)&&!g.isBlocked(1.85,-1.24),shopStations:g.isBlocked(-3.95,4.45)&&g.isBlocked(4.05,4.45),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(0,-2.2)&&!g.isBlocked(0,-3),binInside:!!trash&&trash.position.x+.43<4.44&&trash.position.z-.43>-2.5,carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver')),allCanopyCaps:canopyCaps.length===3,thirdBay:g.pumps.length===3&&g.isBlocked(-6.6,-7.4)&&!g.isBlocked(-8.9,-7.4),clearInterior:shelves.length===2&&shelves.every(o=>o.position.z>4)&&landmarks.every(Boolean),landmarksLabeled:g.landmarkLabels.length>=7&&g.landmarkLabels.every(o=>o.visible),landmarksReachable:landmarks.every(reachable),secondFloor:!!g.secondFloor&&!!g.secondFloor.getObjectByName('UpperFloor')&&!!g.secondFloor.getObjectByName('StairStep14')&&g.upperDoorParts.length===3}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
@@ -309,16 +309,17 @@ const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
   out.legacyContinues=g.state.saveVersion===4&&g.state.shift===8&&!g.state.campaignComplete&&g.state.levelsCleared===7&&g.state.money===321&&g.state.upgrades.speed===2;
   g.setState({saveVersion:3,money:500,shift:1,rep:3,tutorial:true,sound:true,musicVolume:80,best:0,levelsCleared:0,campaignComplete:false,campaignEarnings:0,campaignServed:0});
   g.startShift();
-  out.levelFromData=g.shiftConfig.number===1&&g.shiftLength===170&&g.shiftConfig.orderIntensity===0&&g.shiftConfig.allowedEvents.length===0&&g.shiftConfig.queueSize===1;
+  out.levelFromData=g.shiftConfig.number===1&&g.shiftLength===170&&g.shiftConfig.orderMenu.join()==='coffee'&&g.shiftConfig.allowedEvents.length===0&&g.shiftConfig.queueSize===1;
   out.hudShowsLevel=document.querySelector('#shift-label').textContent==='УРОВЕНЬ 1 / 30'&&document.querySelector('#level-name').textContent.includes('Первая заправка');
-  out.hudShowsGoal=document.querySelector('#level-goal').textContent.includes('0 / 3');
+  const target=g.shiftConfig.goal.served;
+  out.hudShowsGoal=document.querySelector('#level-goal').textContent.includes(`0 / ${target}`);
   // Цель не выполнена: уровень не зачтён, причина названа, уровень остаётся прежним.
   g.served=1;g.finishShift();
   out.failKeepsLevel=g.state.shift===1&&g.state.levelsCleared===0&&g.levelResult.passed===false;
-  out.failExplained=document.querySelector('#result-goal').textContent.includes('1 из 3')&&document.querySelector('#result-eyebrow').textContent.includes('НЕ ЗАЧТЁН');
+  out.failExplained=document.querySelector('#result-goal').textContent.includes(`1 из ${target}`)&&document.querySelector('#result-eyebrow').textContent.includes('НЕ ЗАЧТЁН');
   out.retryOffered=document.querySelector('#next-shift').textContent.includes('ПОВТОРИТЬ');
   // Цель выполнена: уровень зачтён и открывается следующий.
-  g.startShift();g.served=3;g.state.money+=200;g.finishShift();
+  g.startShift();g.served=target;g.state.money+=200;g.finishShift();
   out.passAdvances=g.state.shift===2&&g.state.levelsCleared===1&&g.levelResult.passed===true;
   out.passExplained=document.querySelector('#result-eyebrow').textContent.includes('ПРОЙДЕН')&&document.querySelector('#next-shift').textContent.includes('СЛЕДУЮЩИЙ');
   return out;});
@@ -326,7 +327,8 @@ if(Object.values(campaign).some(v=>!v))throw new Error(`Campaign level flow fail
 const levelRules=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const startLevel=number=>{g.setState({...g.state,shift:number,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[]};
   // Механики открываются данными уровня: на первом уровне заказов нет вообще.
-  startLevel(1);out.firstLevelHasNoOrders=g.shiftConfig.orderMenu.length===0&&g.shiftConfig.startStock.coffee===5;
+  // Первая ночь учит заправке и кофе — и полки на ней всегда полные.
+  startLevel(1);out.firstLevelSellsCoffeeOnly=g.shiftConfig.orderMenu.join()==='coffee'&&g.shiftConfig.startStock.coffee===5&&g.shiftConfig.allowedEvents.length===0;
   startLevel(3);out.coffeeOnly=g.shiftConfig.orderMenu.join()==='coffee';
   startLevel(6);out.foodUnlocked=g.shiftConfig.orderMenu.join()==='coffee,snack';
   // Пустой склад с порога ставит задачу пополнения, а не молчит.
@@ -492,12 +494,15 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   g.spawnCar();const car=g.cars[0];
   for(let i=0;i<2200&&car.status!=='waiting';i++)g.updateCars(.05);
   out.parked=car.status==='waiting';
-  out.customerSent=!!car.customer&&g.customers.length===1&&car.customer.state==='walkingIn';
+  // Из легковой может выйти и спутник: этот сценарий про одного, лишних отправляем назад.
+  g.customers.slice(1).forEach(extra=>g.despawnCustomer(extra));
+  const rider=g.customers[0];
+  out.customerSent=!!rider&&g.customers.length===1&&rider.state==='walkingIn'&&car.customers.includes(rider);
   // Уходит именно тот, кто сидел за рулём: салон остаётся пустым.
   out.seatEmpties=car.seats.length>0&&car.seats[0].meshes.every(mesh=>!mesh.visible);
-  out.customerWearsTheSeat=car.customer.group.getObjectByName('Body')?.material.color.getHex()===car.seats[0].coat;
+  out.customerWearsTheSeat=rider.group.getObjectByName('Body')?.material.color.getHex()===car.seats[0].coat;
   // Сквозь покупателя не проходят, но из него всегда можно выйти.
-  {const customer=car.customer,saved=customer.position.clone();
+  {const customer=rider,saved=customer.position.clone();
    customer.position.set(1.2,.26,-1.6);
    g.player.position.set(0,.26,-4);
    out.customerBlocks=g.isBlocked(1.2,-1.6)&&g.isBlocked(1.55,-1.6);
@@ -550,6 +555,38 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
   g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();
   return out;});
 if(Object.values(shopCustomers).some(v=>!v))throw new Error(`Shop customers failed: ${JSON.stringify(shopCustomers)}`);
+const messyShop=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
+  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.jobs=g.jobs.filter(j=>j.hidden);
+  g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.carry=null;g.updateCarry();
+  g.shiftConfig={...g.shiftConfig,orderIntensity:1,orderMenu:['coffee']};
+  g.spawnCar();const car=g.cars.at(-1);
+  for(let i=0;i<2600&&car.status!=='waiting';i++)g.updateCars(.05);
+  g.customers.slice(1).forEach(extra=>g.despawnCustomer(extra));
+  for(let i=0;i<1600&&g.customers[0]?.state!=='waiting';i++)g.updateCustomers(.05);
+  const prep=g.jobs.find(j=>j.tag==='order-prep');
+  out.orderWaiting=!!prep;
+  // Пятно закрывает прилавок целиком: заказ не приготовить, пока пол липкий.
+  g.spawnSpill();const spill=g.jobs.find(j=>j.tag==='spill');
+  out.spillAppeared=!!spill&&spill.priority>1;
+  out.orderBlocked=reach(prep)&&!hold(()=>!!g.carry,80)&&g.carry===null;
+  out.promptExplains=document.querySelector('#prompt-subtitle').textContent.includes('пятно');
+  // Терпение такого заказа стоит: клиент не виноват, что пол мокрый.
+  const patienceBefore=prep.patience;
+  for(let i=0;i<20;i++)g.updateJobs(.05);
+  out.patiencePaused=Math.abs(prep.patience-patienceBefore)<1e-9;
+  // Убрали — и прилавок снова работает.
+  g.carry='mop';g.updateCarry();
+  out.spillCleaned=reach(spill)&&hold(()=>!g.jobs.includes(spill));
+  g.carry=null;g.updateCarry();
+  out.orderWorksAgain=reach(prep)&&hold(()=>g.carry==='coffee');
+  g.carry=null;g.updateCarry();g.jobs=g.jobs.filter(j=>j.hidden);
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
+  return out;});
+if(Object.values(messyShop).some(v=>!v))throw new Error(`Spill closing the shop failed: ${JSON.stringify(messyShop)}`);
 const shopMenu=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
@@ -675,9 +712,10 @@ const nightWeather=await page.evaluate(()=>{const g=window.__nightStation,out={}
   const startLevel=number=>{g.setState({...g.state,shift:number,campaignComplete:false});g.startShift()};
   startLevel(25);
   out.rain=g.weather==='rain'&&g.rain.points.visible&&g.scene.fog.density>.028&&g.sky.group.visible;
-  const heights=[...Array(24)].map((_,i)=>g.rain.positions[i*6+1]);g.updateRain(.05);
+  // Часть капель каждый кадр уходит на новый круг, поэтому смотрим на большинство, а не на все.
+  const heights=[...Array(40)].map((_,i)=>g.rain.positions[i*6+1]);g.updateRain(.05);
   const fell=heights.filter((y,i)=>g.rain.positions[i*6+1]<y).length;
-  out.rainFalls=fell>=heights.length-2&&Math.abs(g.rain.points.position.x-g.camera.position.x)<.001;
+  out.rainFalls=fell>=Math.ceil(heights.length*.8)&&Math.abs(g.rain.points.position.x-g.camera.position.x)<.001;
   out.wetGround=g.groundMats.every(material=>material.roughness<.5);
   startLevel(28);
   out.fog=g.weather==='fog'&&!g.rain.points.visible&&g.scene.fog.density>.05&&!g.sky.group.visible&&g.groundMats.every(m=>m.roughness>.9);
@@ -832,6 +870,20 @@ const vehicleTypes=await page.evaluate(async()=>{
   g.customers.filter(c=>c.car===bus).forEach(c=>{c.served=true;g.despawnCustomer(c)});
   out.busLeavesWhenEmpty=bus.status==='leaving'||bus.leaveWhenReady===true||g.state.stats.busLoads>0;
   out.fullBusCounted=g.state.stats.busLoads>0;
+
+  // Из легковой выходит и спутник: два заказа с одной машины.
+  clear();
+  g.shiftConfig={...g.shiftConfig,fleet:{car:1},orderIntensity:1,orderMenu:['coffee']};
+  let together=0;
+  for(let attempt=0;attempt<14&&together<2;attempt++){
+    clear();
+    if(!g.spawnCar())continue;
+    const rider=g.cars.at(-1);
+    for(let i=0;i<3000&&rider.status!=='waiting';i++)g.updateCars(.05);
+    together=Math.max(together,g.customers.filter(one=>one.car===rider).length);
+  }
+  out.carCanBringTwo=together===2;
+  out.carHasTwoSeats=VEHICLES.car.orders===2&&VEHICLES.car.groupChance>0;
 
   // Габариты в очереди: место считается по длине тех, кто уже стоит.
   clear();
