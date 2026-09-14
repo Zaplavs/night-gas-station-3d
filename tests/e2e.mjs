@@ -43,7 +43,7 @@ const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOp
 if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter are blocked: ${JSON.stringify(shopAccess)}`);
 const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
-  const findSpot=(job,y)=>{const p=job.pos();for(let r=.2;r<=1.7;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,y))continue;g.player.position.set(x,y,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
+  const findSpot=(job,y)=>{const p=job.pos();for(let r=.2;r<=1.7;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,y))continue;g.player.position.set(x,y,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry();g.stock={coffee:0,snack:0,hotdog:0,soda:0};g.updateHud();g.createRestockJob('coffee');g.createRestockJob('snack');
   const heights=[];for(let i=0;i<=14;i++)heights.push(g.floorHeight(5.82,-2.37+i*(5.45/14),heights.at(-1)??.26));
   out.stairsRise=heights.every((h,i)=>i===0||h>heights[i-1])&&heights.at(-1)>3.5;
@@ -52,9 +52,9 @@ const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const coffeePick=g.jobs.find(j=>j.tag==='restock-coffee-pick'),snackPick=g.jobs.find(j=>j.tag==='restock-snack-pick');
   g.player.position.set(coffeePick.pos().x,.26,coffeePick.pos().z);g.updateInteraction(0);out.noThroughFloor=g.nearest!==coffeePick;
   g.player.position.set(5.25,3.68,3.15);for(let i=0;i<30;i++)g.updateDoors(.05);out.upperDoorOpens=g.upperDoorOpen===1&&!g.isBlocked(4.22,3.15,null,3.68);
-  const coffeeAt=findSpot(coffeePick,3.68);out.coffeeReachable=!!coffeeAt;if(coffeeAt)g.player.position.set(coffeeAt.x,3.68,coffeeAt.z);out.tookCoffee=out.coffeeReachable&&hold(()=>g.carry==='coffeeBox')&&g.hands.current==='coffeeBox'&&g.stockVisuals.coffee.every(o=>!o.visible);
+  const coffeeAt=findSpot(coffeePick,3.68);out.coffeeReachable=!!coffeeAt;if(coffeeAt)g.player.position.set(coffeeAt.x,3.68,coffeeAt.z);out.tookCoffee=out.coffeeReachable&&hold(()=>g.carry==='coffeeBox')&&g.hands.current==='coffeeBox'&&g.stockBoxesOf('coffee').filter(box=>!box[0].visible).length===1;
   const coffeePut=g.jobs.find(j=>j.tag==='restock-coffee-put'),coffeeDown=coffeePut&&findSpot(coffeePut,.26);out.coffeeDownstairs=!!coffeeDown;if(coffeeDown)g.player.position.set(coffeeDown.x,.26,coffeeDown.z);out.filledCoffee=out.coffeeDownstairs&&hold(()=>g.stock.coffee===5)&&g.stockVisuals.coffee.every(o=>o.visible);
-  const snackAt=findSpot(snackPick,3.68);out.snackReachable=!!snackAt;if(snackAt)g.player.position.set(snackAt.x,3.68,snackAt.z);out.tookSnack=out.snackReachable&&hold(()=>g.carry==='snackBox')&&g.hands.current==='snackBox'&&g.stockVisuals.snack.every(o=>!o.visible);
+  const snackAt=findSpot(snackPick,3.68);out.snackReachable=!!snackAt;if(snackAt)g.player.position.set(snackAt.x,3.68,snackAt.z);out.tookSnack=out.snackReachable&&hold(()=>g.carry==='snackBox')&&g.hands.current==='snackBox'&&g.stockBoxesOf('snack').filter(box=>!box[0].visible).length===1&&g.stockVisuals.snack.some(o=>o.visible);
   const snackPut=g.jobs.find(j=>j.tag==='restock-snack-put'),snackDown=snackPut&&findSpot(snackPut,.26);out.snackDownstairs=!!snackDown;if(snackDown)g.player.position.set(snackDown.x,.26,snackDown.z);out.filledSnack=out.snackDownstairs&&hold(()=>g.stock.snack===5)&&g.stockVisuals.snack.every(o=>o.visible);
   out.independentCapacity=g.stock.coffee===5&&g.stock.snack===5&&document.querySelector('#stock-coffee').textContent==='5/5'&&document.querySelector('#stock-snack').textContent==='5/5';
   g.player.position.set(0,.26,-3);g.updatePlayer(0);return out;});
@@ -92,7 +92,8 @@ const freeRestock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   g.stock.coffee=2;g.updateHud();
   out.takenWithoutJob=hold(()=>g.carry==='coffeeBox')&&!g.jobs.some(j=>j.tag==='restock-coffee-pick');
   out.deliveryQueued=g.jobs.some(j=>j.tag==='restock-coffee-put');
-  out.shelfEmptied=g.stockVisuals.coffee.every(o=>!o.visible);
+  // Унесли одну коробку — со стеллажа пропала ровно одна.
+  out.oneBoxGone=g.stockBoxesOf('coffee').filter(box=>!box[0].visible).length===1&&g.stockVisuals.coffee.some(o=>o.visible);
   g.updateInteraction(0);out.standOffersReturn=g.nearest===stand&&g.jobLabel(stand).startsWith('Верните');
   out.boxGoesBack=hold(()=>g.carry===null)&&g.stockVisuals.coffee.every(o=>o.visible)&&!g.jobs.some(j=>j.tag==='restock-coffee-put');
   g.stock={coffee:5,snack:5,hotdog:5,soda:5};g.updateHud();g.player.position.set(0,.26,-3.35);g.updatePlayer(0);return out;});
@@ -100,7 +101,7 @@ if(Object.values(freeRestock).some(v=>!v))throw new Error(`Free restocking faile
 await mkdir('artifacts',{recursive:true});
 await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(8,.26,-8);g.yaw=2.28;g.pitch=.19;g.updatePlayer(0)});await page.waitForTimeout(350);await page.screenshot({path:'artifacts/second-floor.png'});await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-3);g.yaw=0;g.pitch=-.04;g.updatePlayer(0)});
 const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
-  const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
+  const findSpot=job=>{const p=job.pos();for(let r=.65;r<=2;r+=.15)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
   const hold=(done,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!done();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return done()};
   for(const index of [0,1,2]){
     g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.traffic.slice().forEach(t=>g.despawn(t,g.traffic));g.jobs=g.jobs.filter(j=>j.hidden);
@@ -119,6 +120,43 @@ const service=await page.evaluate(()=>{const g=window.__nightStation,out=[];
 if(service.some(r=>!r.parked||!r.pickupReachable||!r.tookHose||!r.hoseShown||!r.fuelReachable||!r.fuelFlow||!r.flowStops||!r.fuelingSeen||!r.paid||!r.hoseReturned))throw new Error(`Two-step refuelling failed: ${JSON.stringify(service)}`);
 // Полосы задаёт traffic.js: тест проверяет, что машина уходит именно на них.
 const lanes=await page.evaluate(async()=>{const {ROAD}=await import('/src/traffic.js');return {near:ROAD.near,far:ROAD.far}});
+const fuelAim=await page.evaluate(()=>{const g=window.__nightStation,out={};
+  const faceTo=point=>{g.yaw=Math.atan2(-(point.x-g.player.position.x),-(point.z-g.player.position.z))};
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.jobs=g.jobs.filter(j=>j.hidden);
+  g.traffic.slice().forEach(t=>g.despawn(t,g.traffic));g.traffic=[];
+  g.pumps.forEach((p,i)=>{p.car=i?{}:null;p.broken=false;p.reserved=false});
+  g.shiftConfig={...g.shiftConfig,fleet:{car:1},orderIntensity:0};
+  g.spawnCar();const car=g.cars[0];
+  for(let i=0;i<2200&&car.status!=='waiting';i++)g.updateCars(.05);
+  out.parked=car.status==='waiting';
+  const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup');
+  g.removeJob(pickup);pickup.onComplete();
+  const fuel=g.jobs.find(j=>j.car===car&&j.kind==='fuel');
+  out.fuelNeedsCloseRange=!!fuel&&fuel.range<1.8&&fuel.aim===true&&g.carry==='hose';
+  const spot=fuel.pos();
+  // Издалека заправку даже не предлагают.
+  g.player.position.set(spot.x+2.7,.26,spot.z);faceTo(spot);g.updateInteraction(0);
+  out.farAwayIgnored=g.nearest!==fuel;
+  // Вплотную, но спиной к машине: задача видна, бензин не идёт.
+  g.player.position.set(spot.x+1.15,.26,spot.z);faceTo(spot);g.updateInteraction(0);
+  const near=g.nearest===fuel;
+  g.yaw+=Math.PI;g.updateInteraction(0);
+  const before=g.state.money;
+  g.actionLatched=false;g.actionHeld=true;for(let i=0;i<120;i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;
+  out.lookingAwayBlocked=near&&g.state.money===before&&car.status!=='fueling';
+  out.promptExplains=document.querySelector('#prompt-subtitle').textContent.includes('Направьте');
+  // Повернулись к лючку — заправка пошла.
+  faceTo(spot);g.updateInteraction(0);
+  g.actionLatched=false;g.actionHeld=true;
+  let fueled=false;
+  for(let i=0;i<300&&g.state.money===before;i++){g.updateInteraction(.05);fueled||=car.status==='fueling'}
+  g.actionHeld=false;g.actionLatched=false;
+  out.facingTheCarWorks=fueled&&g.state.money>before;
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.jobs=g.jobs.filter(j=>j.hidden);
+  g.pumps.forEach(p=>{p.car=null;p.departingCar=null});g.carry=null;g.updateCarry();
+  g.player.position.set(0,.26,-3);g.yaw=0;
+  return out;});
+if(Object.values(fuelAim).some(v=>!v))throw new Error(`Fuelling range and aim failed: ${JSON.stringify(fuelAim)}`);
 const onRoad=p=>Math.abs(p.x)>40&&p.z<lanes.near+2.5&&p.z>lanes.far-2.5;
 const road=await page.evaluate(()=>{const g=window.__nightStation;
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.carQueue=[];g.pumps.forEach(p=>{p.car=null;p.broken=false});g.spawnCar();const c=g.cars[0],start=c.path.curve.getPointAt(0);
@@ -197,7 +235,7 @@ if(Object.values(handChecks).some(v=>!v))throw new Error(`Hand item checks faile
 const chores=await page.evaluate(()=>{const g=window.__nightStation;
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++){g.updateInteraction(.05)}g.actionHeld=false;g.actionLatched=false;return check()};
   const goTo=p=>{const floor=(p.y??.26)>3?3.68:.26;g.player.position.set(p.x,floor,p.z+.9);g.updateInteraction(0)};
-  const findSpot=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.35;r<=1.3;r+=.1)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return{x,y:floor,z}}return null};
+  const findSpot=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.35;r<=1.3;r+=.1)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return{x,y:floor,z}}return null};
   const out={};
   g.carry=null;g.updateCarry();
   g.spawnSpill();
@@ -485,7 +523,7 @@ const trafficJams=await page.evaluate(async()=>{const g=window.__nightStation,ou
 if(Object.values(trafficJams).some(v=>!v))throw new Error(`Traffic jam rules failed: ${JSON.stringify(trafficJams)}`);
 const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
-  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
   const walk=(steps=1500,done=()=>false)=>{for(let i=0;i<steps&&!done();i++)g.updateCustomers(.05);return done()};
   g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
@@ -558,7 +596,7 @@ const shopCustomers=await page.evaluate(()=>{const g=window.__nightStation,out={
 if(Object.values(shopCustomers).some(v=>!v))throw new Error(`Shop customers failed: ${JSON.stringify(shopCustomers)}`);
 const messyShop=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
-  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
   g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.jobs=g.jobs.filter(j=>j.hidden);
@@ -590,8 +628,8 @@ const messyShop=await page.evaluate(()=>{const g=window.__nightStation,out={};
 if(Object.values(messyShop).some(v=>!v))throw new Error(`Spill closing the shop failed: ${JSON.stringify(messyShop)}`);
 const shopMenu=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
-  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
-  const reachUpstairs=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,3.68))continue;g.player.position.set(x,3.68,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reachUpstairs=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,3.68))continue;g.player.position.set(x,3.68,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:30,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.clearCustomers();
   g.jobs=g.jobs.filter(j=>j.hidden);
@@ -653,7 +691,7 @@ const thirdBay=await page.evaluate(()=>{const g=window.__nightStation,out={};
 if(Object.values(thirdBay).some(v=>!v))throw new Error(`Third bay failed: ${JSON.stringify(thirdBay)}`);
 const fuelDelivery=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=400)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
-  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos();for(let r=.6;r<=2.1;r+=.12)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:19,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
   document.querySelectorAll('.toast').forEach(t=>t.remove());
@@ -905,7 +943,7 @@ if(Object.values(achievementScreen).some(v=>!v))throw new Error(`Achievement scr
 const achievementUnlock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   // Встать так, чтобы целью была именно нужная задача: пятно падает в случайное место.
-  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=1.3;r+=.1)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=1.3;r+=.1)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.yaw=Math.atan2(-(p.x-x),-(p.z-z));g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:4,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
   document.querySelectorAll('.toast').forEach(t=>t.remove());

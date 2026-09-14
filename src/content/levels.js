@@ -8,7 +8,7 @@ import { VEHICLES, normalizeFleet } from './vehicles.js';
 
 export const CHAPTERS = Object.freeze([
   Object.freeze({ number: 1, title: 'Первые ночи', subtitle: 'Колонка, пистолет и один клиент за раз' }),
-  Object.freeze({ number: 2, title: 'Магазин', subtitle: 'Кофе, еда и склад на втором этаже' }),
+  Object.freeze({ number: 2, title: 'Магазин', subtitle: 'Кофе, сэндвичи и склад на втором этаже' }),
   Object.freeze({ number: 3, title: 'Три поста', subtitle: 'Очередь, левая колонка и те, кто спешит' }),
   Object.freeze({ number: 4, title: 'Железо', subtitle: 'Колонки ломаются, а топливо привозят по ночам' }),
   Object.freeze({ number: 5, title: 'Темнота', subtitle: 'Свет гаснет, а трасса не ждёт' }),
@@ -182,10 +182,10 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     rushes: [{ at: 110, duration: 32, interval: [7, 10], label: 'Колонна с трассы' }],
   }),
 
-  /* ── Глава 2. Магазин: еда, пустые полки и склад наверху ── */
+  /* ── Глава 2. Магазин: сэндвичи, пустые полки и склад наверху ── */
   defineLevel({
     number: 6, chapter: 2, name: 'Сэндвич в дорогу',
-    brief: 'К кофе добавилась еда: витрина стоит на прилавке справа. Заказов теперь два вида, а руки по-прежнему одни.',
+    brief: 'К кофе добавились сэндвичи: витрина стоит на прилавке справа. Заказов теперь два вида, а руки по-прежнему одни.',
     duration: 215, goal: { served: 7 },
     carSpawn: { initialDelay: 1, interval: [17, 22] },
     customerPatience: 52, orderIntensity: 0.6, orderMenu: ['coffee', 'snack'],
@@ -519,7 +519,7 @@ export function featureTags(level) {
   if (level.queueSize > 1) tags.push('очередь');
   if (level.startStock.coffee + level.startStock.snack < 8) tags.push('склад');
   if (level.orderIntensity >= 0.8) tags.push('поток заказов');
-  else if (level.orderMenu.includes('snack')) tags.push('кофе и еда');
+  else if (level.orderMenu.includes('snack')) tags.push('кофе и сэндвичи');
   else if (level.orderMenu.includes('coffee')) tags.push('кофе');
   if (!tags.length) tags.push('основы');
   return tags.slice(0, 4);

@@ -39,8 +39,8 @@ export const STOCKS = Object.freeze({
     source: 'upstairs', carry: 'coffeeBox', target: 'Пополните кофемашину', where: 'Склад на 2 этаже · лестница снаружи справа',
   }),
   snack: Object.freeze({
-    id: 'snack', label: 'еды', chip: 'ЕДА', gone: 'Еда закончилась', full: 'Витрина и так полная',
-    source: 'upstairs', carry: 'snackBox', target: 'Пополните витрину еды', where: 'Склад на 2 этаже · лестница снаружи справа',
+    id: 'snack', label: 'сэндвичей', chip: 'СЭНДВИЧИ', gone: 'Еда закончилась', full: 'Витрина и так полная',
+    source: 'upstairs', carry: 'snackBox', target: 'Пополните витрину сэндвичей', where: 'Склад на 2 этаже · лестница снаружи справа',
   }),
   hotdog: Object.freeze({
     id: 'hotdog', label: 'хот-догов', chip: 'ХОТ-ДОГИ', gone: 'Хот-доги закончились', full: 'Гриль и так полный',
