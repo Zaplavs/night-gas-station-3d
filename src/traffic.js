@@ -86,6 +86,17 @@ export function exitPath(slotX,slotZ,side,reach=REVERSE_REACH){
   ],{stop:false});
 }
 
+/* Уехал, не дождавшись: из линии машина трогается вперёд и уходит на трассу
+   тем же коридором, что и обслуженные. */
+export function queueExitPath(position){
+  const away=-1,lane=laneFor(away),{x,z}=position;
+  // Сначала вбок из линии, и только потом вперёд: впереди стоят те, кто ещё ждёт.
+  return path([
+    [x,z],[x-1.6,z-2.9],[x-6,EXIT_LANE],[x-13,EXIT_LANE],
+    [x-22,lane+(lane<ROAD.center?2.2:.6)],[x-32,lane],[x-46,lane],[away*ROAD.edge,lane]
+  ],{stop:false});
+}
+
 /* Транзит: попутная машина, которая просто проезжает мимо заправки. */
 export function passPath(side){
   const lane=laneFor(-side);

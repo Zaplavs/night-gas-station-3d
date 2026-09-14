@@ -1092,6 +1092,49 @@ const vehicleTypes=await page.evaluate(async()=>{
   clear();g.testFleet=null;
   return out;});
 if(Object.values(vehicleTypes).some(v=>!v))throw new Error(`Vehicle types failed: ${JSON.stringify(vehicleTypes)}`);
+// Очередь — это тоже ожидание: у каждого стоящего тикает свой таймер,
+// и, не дождавшись, клиент уезжает сам.
+const queueTimer=await page.evaluate(()=>{
+  const g=window.__nightStation,out={};
+  g.setState({...g.state,shift:12,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
+  g.spawnTimer=1e9;g.eventTimer=1e9;g.trafficTimer=1e9;
+  g.testFleet={car:1};g.shiftConfig={...g.shiftConfig,fleet:{car:1},queueSize:3};
+  const step=n=>{for(let i=0;i<n;i++){g.updateCars(.05);g.updateJobs(.05)}};
+  // Посты заняты — приезжие встают в линию.
+  g.pumps.forEach(p=>p.car={});
+  g.spawnCar();step(220);g.spawnCar();step(220);
+  out.lineBuilt=g.carQueue.length===2;
+  const waiting=g.jobs.filter(j=>j.kind==='queue');
+  out.everyoneHasTimer=waiting.length===g.carQueue.length;
+  out.timerRuns=waiting.every(j=>j.patience>0&&j.maxPatience>0&&j.patience<j.maxPatience);
+  out.moreRoomThanAtPump=waiting.every(j=>j.maxPatience>j.car.patience);
+  out.listedWithBar=[...document.querySelectorAll('#task-list .task')].some(el=>el.textContent.includes('В очереди ждёт')&&el.querySelector('.patience'));
+  const spot=g.carQueue[0].group.position,back=g.player.position.clone();
+  g.player.position.set(spot.x,.26,spot.z+1.4);g.updateInteraction(0);
+  out.nothingToDoWithIt=g.nearest?.kind!=='queue';
+  g.player.position.copy(back);
+  // Терпение кончилось: машина выезжает из линии вперёд и уходит на трассу.
+  const first=g.carQueue[0],second=g.carQueue[1],lost=g.lost,secondTarget=second.target.x,secondJob=second.queueJob,lineZ=first.group.position.z;
+  first.queueJob.patience=.04;step(30);
+  out.givesUp=first.status==='leaving'&&first.phase==='exiting';
+  out.countedAsLost=g.lost===lost+1;
+  out.outOfLine=!g.carQueue.includes(first)&&!g.jobs.some(j=>j.car===first);
+  out.lineMovesUp=second.target.x<secondTarget-.5;
+  let sideways=0;for(let i=0;i<140;i++){step(1);sideways=Math.max(sideways,lineZ-first.group.position.z)}
+  out.pullsOutOfTheLine=sideways>1.5;
+  step(400);
+  out.leavesTheMap=!g.cars.includes(first);
+  // Позвали к колонке — таймер очереди снимается, дальше считает терпение у поста.
+  g.pumps.forEach(p=>{p.car=null});
+  for(let i=0;i<900&&second.status!=='waiting';i++)step(1);
+  out.calledToPump=!!second.pump&&second.status==='waiting';
+  out.timerHandedOver=!g.jobs.includes(secondJob)&&!second.queueJob&&g.jobs.some(j=>j.car===second&&j.kind!=='queue');
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+  g.jobs=g.jobs.filter(j=>j.hidden);g.testFleet=null;
+  return out;});
+if(Object.values(queueTimer).some(v=>!v))throw new Error(`Queue timer failed: ${JSON.stringify(queueTimer)}`);
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
@@ -1156,4 +1199,4 @@ await mobile.screenshot({path:'artifacts/mobile-play.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, a dawn in the last minute, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, a dawn in the last minute, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue with its own patience, safety, fuel flow and traffic are working.');await browser.close();
