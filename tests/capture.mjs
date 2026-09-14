@@ -25,7 +25,17 @@ await page.evaluate(()=>window.__nightStation.eventBlackout());await page.waitFo
 await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();for(let i=0;i<800&&g.specialVan.status==='entering';i++)g.updateCars(.05)});await page.waitForTimeout(600);await page.screenshot({path:'promo/screenshots/04-strange-van.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:19,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.runEvent('tanker');for(let i=0;i<2600&&g.tanker&&g.tanker.status==='entering';i++)g.updateCars(.05);g.carry='tankerHose';g.updateCarry();g.hands.raise=1;g.player.position.set(-8.2,.26,-1.2);g.yaw=.66;g.pitch=-.1;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/06-fuel.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();g.served=6;g.state.money+=430;g.state.rep=3.4;g.elapsed=120;g.updateHud();g.player.position.set(.2,.26,-4.2);g.yaw=.12;g.pitch=-.02;g.updatePlayer(0)});await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/05-goal.png'});
+await page.evaluate(async()=>{const g=window.__nightStation,{VEHICLES}=await import('/src/content/vehicles.js');
+  g.carry=null;g.updateCarry();g.setState({...g.state,shift:20,campaignComplete:false});g.startShift();
+  g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
+  g.spawnBigVehicle(VEHICLES.truck);const truck=g.cars.at(-1);
+  for(let i=0;i<4000&&truck.status!=='waiting';i++)g.updateCars(.05);
+  g.shiftConfig={...g.shiftConfig,fleet:{bike:1}};g.spawnCar();const bike=g.cars.at(-1);
+  for(let i=0;i<4000&&bike.status!=='waiting';i++)g.updateCars(.05);
+  g.carry='hose';g.updateCarry();g.hands.raise=1;
+  g.player.position.set(-4.0,.26,-3.5);g.yaw=.81;g.pitch=-.02;g.updatePlayer(0);g.updateInteraction(0)});
+await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/08-vehicles.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffeeBox';g.updateCarry();g.hands.raise=1;g.player.position.set(0,3.68,1.9);g.yaw=Math.PI;g.pitch=-.03;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(600);await page.screenshot({path:'public/tutorial/07-stock.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
 await page.setViewportSize({width:1024,height:1024});await page.evaluate(()=>{const g=window.__nightStation;document.querySelectorAll('body > *:not(#game)').forEach(e=>e.style.display='none');g.mode='capture';g.updateMenu=()=>{};g.scene.traverse(o=>{if(['RoadSign','RoadSign24','ShopSign','ShopSign24'].includes(o.name))o.visible=false});g.camera.fov=34;g.camera.updateProjectionMatrix();g.camera.position.set(8,6,-13);g.camera.lookAt(1.5,1,-6.8);g.renderer.render(g.scene,g.camera)});await page.waitForTimeout(300);await page.locator('#scene').screenshot({path:'promo/icon-1024x1024.png'});
-console.log('Captured icon, cover, seven tutorial screens and five gameplay screenshots.');await browser.close();
+console.log('Captured icon, cover, eight tutorial screens and five gameplay screenshots.');await browser.close();

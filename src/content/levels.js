@@ -4,6 +4,8 @@
    через эти же поля: нет заказов — orderIntensity 0, нет склада — полные полки,
    нет поломок — событие не входит в allowedEvents, третий пост закрыт — pumpsOnline 2. */
 
+import { VEHICLES, normalizeFleet } from './vehicles.js';
+
 export const CHAPTERS = Object.freeze([
   Object.freeze({ number: 1, title: 'Первые ночи', subtitle: 'Колонка, пистолет и один клиент за раз' }),
   Object.freeze({ number: 2, title: 'Магазин', subtitle: 'Кофе, еда и склад на втором этаже' }),
@@ -76,6 +78,7 @@ const defineLevel = ({
   queueSize = 1,
   customerPatience,
   hurryChance = 0,
+  fleet = { car: 1 },
   orderIntensity = 0,
   orderMenu = [],
   startStock = { coffee: 5, snack: 5, hotdog: 5, soda: 5 },
@@ -104,6 +107,7 @@ const defineLevel = ({
   queueSize,
   customerPatience,
   hurryChance,
+  fleet: normalizeFleet(fleet),
   orderIntensity,
   orderMenu: Object.freeze([...orderMenu]),
   startStock: Object.freeze({ coffee: startStock.coffee, snack: startStock.snack, hotdog: startStock.hotdog ?? startStock.snack, soda: startStock.soda ?? 5 }),
@@ -122,6 +126,7 @@ const defineLevel = ({
     duration: entry.duration,
     interval: range(entry.interval),
     queueBoost: entry.queueBoost ?? 1,
+    fleet: entry.fleet ? normalizeFleet(entry.fleet) : null,
     label: entry.label,
   }))),
 });
@@ -221,16 +226,18 @@ export const CAMPAIGN_LEVELS = Object.freeze([
   /* ── Глава 3. Три поста: очередь, левая колонка и те, кто спешит ── */
   defineLevel({
     number: 11, chapter: 3, name: 'Двое в очереди',
-    brief: 'Теперь в очередь встают двое. Обслуживайте по порядку, первый ждёт дольше всех.',
+    brief: 'Теперь в очередь встают двое. Обслуживайте по порядку, первый ждёт дольше всех. Между ними попадаются мотоциклы: бак у них крошечный, а терпение ещё меньше.',
     duration: 235, goal: { served: 9 },
     carSpawn: { initialDelay: 0.9, interval: [14, 19] }, queueSize: 2,
+    fleet: { car: 1, bike: 0.5 },
     customerPatience: 48, orderIntensity: 0.6, orderMenu: ['coffee', 'snack', 'hotdog'],
   }),
   defineLevel({
     number: 12, chapter: 3, name: 'Третий пост',
-    brief: 'Слева открыли третий пост под собственной мачтой. Машин влезает больше, зато и бегать дальше.',
+    brief: 'Слева открыли третий пост под собственной мачтой — и первыми на него пошли фуры: под навесом им не развернуться. Стоят долго, платят вдвое.',
     duration: 240, goal: { served: 11, earn: 820 },
     carSpawn: { initialDelay: 0.8, interval: [13, 17] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.35, truck: 0.5 },
     customerPatience: 48, orderIntensity: 0.65, orderMenu: ['coffee', 'snack', 'hotdog'],
     startStock: { coffee: 3, snack: 3 },
     allowedEvents: ['spill', 'bag'], eventSpawn: { initial: [60, 80], interval: [55, 75] },
@@ -240,6 +247,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Часть клиентов сегодня торопится: платят вдвое, но ждут вдвое меньше. Их машины — жёлтые.',
     duration: 240, goal: { served: 10, maxLost: 2 },
     carSpawn: { initialDelay: 0.8, interval: [14, 18] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.5, truck: 0.3 },
     customerPatience: 46, hurryChance: 0.4, orderIntensity: 0.55, orderMenu: ['coffee', 'snack', 'hotdog'],
     allowedEvents: ['spill'], eventSpawn: { initial: [65, 80], interval: [60, 80] },
   }),
@@ -248,22 +256,24 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Третий пост закрыт на профилактику, зато в магазине очередь: к тому же в холодильнике появилась газировка — четвёртый товар и четвёртый стеллаж на складе.',
     duration: 245, goal: { served: 11, rep: 3.2 },
     carSpawn: { initialDelay: 0.8, interval: [13, 17] }, queueSize: 2,
+    fleet: { car: 1, bike: 0.5 },
     customerPatience: 46, orderIntensity: 0.92, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 },
     allowedEvents: ['spill', 'bag'], eventSpawn: { initial: [55, 70], interval: [50, 70] },
   }),
   defineLevel({
     number: 15, chapter: 3, name: 'Колонна фур', exam: true,
-    brief: 'Экзамен третьей главы: три поста, две волны подряд и спешащие водители.',
+    brief: 'Экзамен третьей главы: три поста, две волны подряд и колонна фур на левом посту.',
     duration: 265, goal: { served: 14, maxLost: 2 },
     carSpawn: { initialDelay: 0.7, interval: [12, 16] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 2, bike: 0.6, truck: 2.6 },
     customerPatience: 44, hurryChance: 0.3, orderIntensity: 0.75, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 },
     allowedEvents: ['spill', 'bag'], eventSpawn: { initial: [50, 65], interval: [45, 65] },
     scripted: [{ at: 40, event: 'spill' }],
     rushes: [
       { at: 75, duration: 34, interval: [6.5, 9], label: 'Первая волна' },
-      { at: 170, duration: 38, interval: [6, 8.5], queueBoost: 2, label: 'Вторая волна' },
+      { at: 170, duration: 38, interval: [6, 8.5], queueBoost: 2, fleet: { car: 2, truck: 2 }, label: 'Колонна фур' },
     ],
   }),
 
@@ -273,6 +283,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Колонка встанет. Ящик с инструментом — у левой стены магазина.',
     duration: 245, goal: { served: 10 },
     carSpawn: { initialDelay: 1, interval: [14, 18] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.4, truck: 0.4 },
     customerPatience: 46, orderIntensity: 0.6, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'], startStock: { coffee: 5, snack: 5, soda: 4 },
     allowedEvents: ['spill', 'broken'], eventSpawn: { initial: [70, 85], interval: [55, 75] },
     scripted: [{ at: 45, event: 'broken' }],
@@ -282,6 +293,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Работает только первая колонка. Вся ночь — через неё, очередь будет длинной.',
     duration: 250, goal: { served: 9, maxLost: 2 },
     carSpawn: { initialDelay: 1, interval: [15, 19] }, queueSize: 3, pumpsOnline: 1,
+    fleet: { car: 1, bike: 0.6 },
     customerPatience: 52, orderIntensity: 0.6, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 3, snack: 3, soda: 4 },
     allowedEvents: ['spill', 'bag'], eventSpawn: { initial: [60, 75], interval: [55, 75] },
@@ -291,6 +303,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'В резервуаре осталось на восемь заправок. Ночью привезут топливо: возьмите рукав и слейте его в горловину слева.',
     duration: 255, goal: { served: 11, rep: 3 },
     carSpawn: { initialDelay: 0.9, interval: [13, 17] }, queueSize: 2,
+    fleet: { car: 1, bike: 0.5 },
     customerPatience: 48, orderIntensity: 0.65, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 }, fuelReserve: 8,
     allowedEvents: ['spill', 'broken', 'tanker'], eventSpawn: { initial: [60, 75], interval: [50, 70] },
@@ -298,9 +311,10 @@ export const CAMPAIGN_LEVELS = Object.freeze([
   }),
   defineLevel({
     number: 19, chapter: 4, name: 'Странный фургон',
-    brief: 'К дальней стоянке подъедет фургон без фар. Проверьте его, когда будет минута, — и не пропустите бензовоз.',
+    brief: 'Ночной автобус: пока он стоит под заправкой, к прилавку выйдет целый салон. А к дальней стоянке подъедет фургон без фар.',
     duration: 255, goal: { served: 11, maxLost: 2 },
     carSpawn: { initialDelay: 0.9, interval: [13, 17] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.4, truck: 0.3, bus: 0.7 },
     customerPatience: 44, hurryChance: 0.25, orderIntensity: 0.7, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'], startStock: { coffee: 5, snack: 5, soda: 4 },
     fuelReserve: 12,
     allowedEvents: ['spill', 'broken', 'van', 'tanker', 'whisper'], eventSpawn: { initial: [50, 65], interval: [45, 62] },
@@ -311,6 +325,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Экзамен четвёртой главы: поломка, наплыв, пустые полки и приёмка топлива в одну смену.',
     duration: 275, goal: { served: 14, maxLost: 2 },
     carSpawn: { initialDelay: 0.7, interval: [12, 16] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.4, truck: 0.5, bus: 0.4 },
     customerPatience: 42, orderIntensity: 0.75, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 1, snack: 1, hotdog: 3, soda: 3 }, fuelReserve: 9, weather: 'rain',
     allowedEvents: ['spill', 'broken', 'bag', 'tanker', 'whisper'], eventSpawn: { initial: [45, 60], interval: [40, 55] },
@@ -324,6 +339,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Ночью вырубит электричество. Без света не работает ничего — сначала щиток.',
     duration: 255, goal: { served: 11 },
     carSpawn: { initialDelay: 1, interval: [14, 18] }, queueSize: 2,
+    fleet: { car: 1, bike: 0.5 },
     customerPatience: 48, orderIntensity: 0.6, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'], startStock: { coffee: 5, snack: 5, soda: 4 },
     allowedEvents: ['spill', 'blackout'], eventSpawn: { initial: [80, 95], interval: [60, 80] },
     scripted: [{ at: 60, event: 'blackout' }],
@@ -333,6 +349,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Щиток выбьет дважды, и все три поста встанут вместе с ним. Руки держите свободными.',
     duration: 265, goal: { served: 12, maxLost: 2 },
     carSpawn: { initialDelay: 0.9, interval: [13, 17] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.4, truck: 0.4, bus: 0.3 },
     customerPatience: 46, orderIntensity: 0.65, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 },
     allowedEvents: ['spill', 'blackout', 'broken'], eventSpawn: { initial: [50, 65], interval: [45, 60] },
@@ -343,6 +360,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Туман, помехи в радио и фургон без фар. Работа при этом не отменяется.',
     duration: 265, goal: { served: 12, rep: 3.2 },
     carSpawn: { initialDelay: 0.9, interval: [13, 17] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.5, truck: 0.3, bus: 0.3 },
     customerPatience: 44, orderIntensity: 0.7, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'], startStock: { coffee: 5, snack: 5, soda: 3 }, weather: 'fog', fuelReserve: 14,
     allowedEvents: ALL_EVENTS, eventSpawn: { initial: [40, 55], interval: [38, 52] },
     scripted: [{ at: 40, event: 'whisper' }, { at: 95, event: 'van' }, { at: 175, event: 'blackout' }],
@@ -352,6 +370,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Открыт только первый пост, и свет ненадёжен. Очередь будет длинной.',
     duration: 270, goal: { served: 11, maxLost: 3 },
     carSpawn: { initialDelay: 0.9, interval: [12, 16] }, queueSize: 3, pumpsOnline: 1,
+    fleet: { car: 1, bike: 0.6 },
     customerPatience: 52, orderIntensity: 0.6, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 },
     allowedEvents: ['spill', 'blackout', 'bag'], eventSpawn: { initial: [55, 70], interval: [45, 62] },
@@ -362,6 +381,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Экзамен пятой главы: ливень, темнота, поломки, две волны и бензовоз посреди всего этого.',
     duration: 300, goal: { served: 15, maxLost: 3 },
     carSpawn: { initialDelay: 0.7, interval: [11, 15] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 1.6, bike: 0.6, truck: 0.6, bus: 0.5 },
     customerPatience: 42, orderIntensity: 0.75, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 1, snack: 2, hotdog: 3, soda: 3 }, fuelReserve: 11, weather: 'rain',
     allowedEvents: ALL_EVENTS, eventSpawn: { initial: [40, 55], interval: [38, 52] },
@@ -375,19 +395,21 @@ export const CAMPAIGN_LEVELS = Object.freeze([
   /* ── Глава 6. Хаос: всё выученное одновременно ── */
   defineLevel({
     number: 26, chapter: 6, name: 'Пересменка на карьере',
-    brief: 'Полки пустые, половина клиентов спешит, а наплыв начнётся почти сразу.',
+    brief: 'Пересменка на карьере: полки пустые, половина клиентов спешит, а на левый пост одна за другой идут фуры.',
     duration: 275, goal: { served: 14, maxLost: 3 },
     carSpawn: { initialDelay: 0.7, interval: [11, 15] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.3, truck: 2, bus: 0.3 },
     customerPatience: 44, hurryChance: 0.45, orderIntensity: 0.8, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 0, snack: 1, hotdog: 2, soda: 2 },
     allowedEvents: ['spill', 'broken', 'bag'], eventSpawn: { initial: [40, 55], interval: [38, 52] },
-    rushes: [{ at: 45, duration: 38, interval: [6, 8], queueBoost: 2, label: 'Смена на карьере' }],
+    rushes: [{ at: 45, duration: 38, interval: [6, 8], queueBoost: 2, fleet: { car: 2, truck: 1.6, bike: 1 }, label: 'Смена на карьере' }],
   }),
   defineLevel({
     number: 27, chapter: 6, name: 'Ремонт посреди волны',
     brief: 'Дождь, полная очередь и колонка, которая сломается прямо в наплыв. Чинить или заправлять — решать вам.',
     duration: 280, goal: { served: 14, rep: 3 },
     carSpawn: { initialDelay: 0.7, interval: [11, 15] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.5, truck: 0.5, bus: 0.4 },
     customerPatience: 44, orderIntensity: 0.7, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 2, snack: 2, soda: 3 }, weather: 'rain',
     allowedEvents: ['spill', 'broken', 'blackout'], eventSpawn: { initial: [45, 60], interval: [40, 55] },
@@ -399,6 +421,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Один пост, туман до самой трассы и два отключения света за ночь.',
     duration: 285, goal: { served: 13, maxLost: 3 },
     carSpawn: { initialDelay: 0.8, interval: [11, 14] }, queueSize: 3, pumpsOnline: 1,
+    fleet: { car: 1, bike: 0.7 },
     customerPatience: 50, orderIntensity: 0.65, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 1, snack: 1, hotdog: 2, soda: 2 }, weather: 'fog',
     allowedEvents: ['spill', 'blackout', 'bag'], eventSpawn: { initial: [50, 65], interval: [42, 58] },
@@ -410,6 +433,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Пятно, сумка, фургон, поломка, темнота и бензовоз. По одному разу и всё за смену.',
     duration: 300, goal: { served: 15, maxLost: 3 },
     carSpawn: { initialDelay: 0.7, interval: [10.5, 14] }, queueSize: 2, pumpsOnline: 3,
+    fleet: { car: 1, bike: 0.5, truck: 0.5, bus: 0.5 },
     customerPatience: 42, hurryChance: 0.3, orderIntensity: 0.8, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 1, snack: 2, hotdog: 3, soda: 3 }, fuelReserve: 12,
     allowedEvents: ALL_EVENTS, eventSpawn: { initial: [35, 50], interval: [35, 48] },
@@ -424,6 +448,7 @@ export const CAMPAIGN_LEVELS = Object.freeze([
     brief: 'Последняя ночь. Ливень, три волны, темнота, пустой склад и два бензовоза. Дотяните до утра.',
     duration: 330, goal: { served: 18, maxLost: 4, rep: 3 },
     carSpawn: { initialDelay: 0.6, interval: [10, 13.5] }, queueSize: 3, pumpsOnline: 3,
+    fleet: { car: 1.4, bike: 0.6, truck: 0.7, bus: 0.6 },
     customerPatience: 42, hurryChance: 0.35, orderIntensity: 0.85, orderMenu: ['coffee', 'snack', 'hotdog', 'soda'],
     startStock: { coffee: 0, snack: 0, hotdog: 2, soda: 2 }, fuelReserve: 12, weather: 'rain',
     allowedEvents: ALL_EVENTS, eventSpawn: { initial: [35, 48], interval: [33, 46] },
@@ -477,6 +502,7 @@ export function featureTags(level) {
   const tags = [];
   if (level.pumpsOnline >= 3) tags.push('3 поста');
   else if (level.pumpsOnline === 1) tags.push('один пост');
+  for (const id of ['truck', 'bus', 'bike']) if (level.fleet?.[id]) tags.push(VEHICLES[id].tag);
   if (level.weather !== 'clear') tags.push(weatherOf(level).tag);
   if (level.hurryChance > 0) tags.push('спешат');
   if (level.fuelReserve !== null) tags.push('бензовоз');

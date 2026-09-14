@@ -1,3 +1,4 @@
+import { normalizeFleet } from './vehicles.js';
 import {
   CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
   WEATHER, HURRY_PATIENCE, HURRY_PAYOUT,
@@ -60,6 +61,8 @@ export function createEndlessShift(round = 1) {
       queueRetry: 2,
     }),
     queueSize: number > 3 ? 3 : 2,
+    // В бесконечной ночи ездят все: чем дальше, тем чаще крупные.
+    fleet: normalizeFleet({ car: 4, bike: 2, truck: 1 + pressure * 0.12, bus: 0.8 + pressure * 0.08 }),
     customerPatience: Math.max(34, 44 - pressure * 1.2),
     hurryChance: Math.min(0.45, 0.2 + pressure * 0.03),
     orderIntensity: Math.min(0.9, 0.7 + pressure * 0.025),
@@ -84,6 +87,7 @@ export function createEndlessShift(round = 1) {
         duration: 40,
         interval: Object.freeze([Math.max(5, 7 - pressure * 0.2), Math.max(7.5, 9.5 - pressure * 0.25)]),
         queueBoost: 2,
+        fleet: normalizeFleet({ car: 3, bike: 1.5, truck: 1.5, bus: 1 }),
         label: 'Наплыв',
       }),
     ]),

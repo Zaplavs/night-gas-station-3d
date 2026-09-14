@@ -9,6 +9,11 @@ await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
 await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:45000});
+// Старые сценарии написаны про легковые: пока тест не попросит другого состава,
+// поток состоит из них — иначе фура уедет на третий пост мимо очереди.
+await page.evaluate(()=>{const g=window.__nightStation,start=g.startShift.bind(g);
+  g.startShift=(...args)=>{start(...args);g.shiftConfig={...g.shiftConfig,fleet:g.testFleet||{car:1}}};
+  g.shiftConfig={...g.shiftConfig,fleet:{car:1}}});
 const debug=await page.evaluate(()=>({mode:window.__nightStation?.mode,elapsed:window.__nightStation?.elapsed,spawn:window.__nightStation?.spawnTimer,cars:window.__nightStation?.cars?.map(c=>({status:c.status,t:c.t,z:c.group.position.z})),jobs:window.__nightStation?.jobs?.map(j=>window.__nightStation.jobLabel(j))}));
 const canvas=await page.locator('#scene').boundingBox();if(!canvas||canvas.width<1000)throw new Error('WebGL canvas was not rendered');
 const checks=await page.evaluate(()=>{const g=window.__nightStation,before=g.player.position.z;g.keys.KeyW=true;g.updatePlayer(.1);g.keys.KeyW=false;const carNames=[],vanNames=[],canopyCaps=[],shelves=[];g.assets.car.traverse(o=>carNames.push(o.name));g.assets.mystery_van.traverse(o=>vanNames.push(o.name));g.station.traverse(o=>{if(o.isMesh&&o.name.startsWith('CanopyLight')&&o.visible)canopyCaps.push(o.name);if(o.isMesh&&o.name.startsWith('ShelfFrame'))shelves.push(o)});const glass=g.assets.car.getObjectByName('FrontWindow'),trash=g.station.getObjectByName('TrashBin'),landmarks=['CoffeeMachine','FoodStation','GrillBase','FridgeBack','FuseFrame','LostAndFound'].map(name=>g.station.getObjectByName(name)),reachable=o=>{if(!o)return false;const p=o.position;for(let r=.7;r<2;r+=.2)for(let i=0;i<20;i++){const a=i/20*Math.PI*2;if(!g.isBlocked(p.x+Math.cos(a)*r,p.z+Math.sin(a)*r))return true}return false};return{firstPerson:!g.player.visible&&Math.abs(g.camera.position.x-g.player.position.x)<.01&&Math.abs(g.camera.position.z-g.player.position.z)<.01,forward:g.player.position.z<before,counter:g.isBlocked(0,1.15)&&!g.isBlocked(0,-1),hall:!g.isBlocked(-1.85,-.28)&&!g.isBlocked(1.85,-1.24),shopStations:g.isBlocked(-3.95,4.45)&&g.isBlocked(4.05,4.45),pump:g.isBlocked(-2.55,-7.4),entrance:!g.isBlocked(0,-2.2)&&!g.isBlocked(0,-3),binInside:!!trash&&trash.position.x+.43<4.44&&trash.position.z-.43>-2.5,carSolid:g.cars.length>0&&g.isBlocked(g.cars[0].group.position.x,g.cars[0].group.position.z),carLane:g.cars.length>0&&Math.abs(g.cars[0].target.x-g.cars[0].pump.x)>1.5,driverVisible:carNames.includes('DriverHead')&&!!glass?.material?.transparent&&glass.material.opacity<.8,vanEmpty:vanNames.includes('VanEmptySeat')&&!vanNames.some(n=>n.startsWith('Driver')),allCanopyCaps:canopyCaps.length===3,thirdBay:g.pumps.length===3&&g.isBlocked(-6.6,-7.4)&&!g.isBlocked(-8.9,-7.4),clearInterior:shelves.length===2&&shelves.every(o=>o.position.z>4)&&landmarks.every(Boolean),landmarksLabeled:g.landmarkLabels.length>=7&&g.landmarkLabels.every(o=>o.visible),landmarksReachable:landmarks.every(reachable),secondFloor:!!g.secondFloor&&!!g.secondFloor.getObjectByName('UpperFloor')&&!!g.secondFloor.getObjectByName('StairStep14')&&g.upperDoorParts.length===3}});if(Object.values(checks).some(v=>!v))throw new Error(`First-person/collision/model checks failed: ${JSON.stringify(checks)}; ${JSON.stringify(debug)}`);
@@ -294,7 +299,7 @@ const jumpButton=await page.evaluate(()=>{const g=window.__nightStation,button=d
 if(Object.values(jumpButton).some(v=>!v))throw new Error(`Mobile jump button failed: ${JSON.stringify(jumpButton)}`);
 await page.waitForTimeout(400);await page.screenshot({path:'artifacts/gameplay.png'});
 await page.evaluate(()=>{const g=window.__nightStation;g.carry='mop';g.updateCarry()});await page.waitForTimeout(500);await page.screenshot({path:'artifacts/hands.png'});await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
-await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 7')throw new Error('Guide navigation failed');await page.click('#guide-close');
+await page.evaluate(()=>document.exitPointerLock?.());await page.click('#guide-btn');await page.locator('#guide:not(.hidden)').waitFor();await page.screenshot({path:'artifacts/guide.png'});await page.click('#guide-next');if(await page.locator('#guide-step').innerText()!=='2 / 8')throw new Error('Guide navigation failed');await page.click('#guide-close');
 const campaign=await page.evaluate(()=>{const g=window.__nightStation,out={};
   // Сейв семисменной кампании продолжается с восьмого уровня, а не считается пройденным.
   g.setState({saveVersion:2,money:321,shift:9,rep:4.2,upgrades:{speed:2},tutorial:true,sound:true,musicVolume:65,best:99,campaignComplete:true});
@@ -652,8 +657,9 @@ const nightWeather=await page.evaluate(()=>{const g=window.__nightStation,out={}
   const startLevel=number=>{g.setState({...g.state,shift:number,campaignComplete:false});g.startShift()};
   startLevel(25);
   out.rain=g.weather==='rain'&&g.rain.points.visible&&g.scene.fog.density>.028&&g.sky.group.visible;
-  const before=g.rain.positions[1],top=g.rain.positions[4];g.updateRain(.05);const after=g.rain.positions[1];
-  out.rainFalls=(after<before||after>before+10)&&g.rain.positions[4]<top+10&&Math.abs(g.rain.points.position.x-g.camera.position.x)<.001;
+  const heights=[...Array(24)].map((_,i)=>g.rain.positions[i*6+1]);g.updateRain(.05);
+  const fell=heights.filter((y,i)=>g.rain.positions[i*6+1]<y).length;
+  out.rainFalls=fell>=heights.length-2&&Math.abs(g.rain.points.position.x-g.camera.position.x)<.001;
   out.wetGround=g.groundMats.every(material=>material.roughness<.5);
   startLevel(28);
   out.fog=g.weather==='fog'&&!g.rain.points.visible&&g.scene.fog.density>.05&&!g.sky.group.visible&&g.groundMats.every(m=>m.roughness>.9);
@@ -733,6 +739,104 @@ await page.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,st
 await page.screenshot({path:'artifacts/achievements.png'});
 await page.evaluate(()=>window.__nightStation.closeAchievements());
 if(errors.length)throw new Error(`Runtime errors: ${errors.join(' | ')}`);
+const vehicleTypes=await page.evaluate(async()=>{
+  const g=window.__nightStation,out={};
+  const {VEHICLES,rollVehicle,queueOffsets}=await import('/src/content/vehicles.js');
+  const {SERVICE_QUEUE}=await import('/src/traffic.js');
+  const clear=()=>{g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
+    g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.clearCustomers();
+    g.pumps.forEach(p=>{p.car=null;p.departingCar=null;p.broken=false;p.closed=false;p.reserved=false});
+    g.jobs=g.jobs.filter(j=>j.hidden);g.carry=null;g.updateCarry()};
+  const park=vehicle=>{for(let i=0;i<4000&&vehicle.status!=='waiting';i++)g.updateCars(.05);return vehicle.status==='waiting'};
+  const fuelThrough=car=>{
+    const before=g.state.money;
+    const pickup=g.jobs.find(j=>j.car===car&&j.kind==='hose-pickup');if(!pickup)return null;
+    g.removeJob(pickup);pickup.onComplete();
+    const action=g.jobs.find(j=>j.car===car&&j.kind==='fuel');if(!action)return null;
+    const duration=action.duration;g.removeJob(action);action.onComplete();
+    return {gain:g.state.money-before,duration};
+  };
+  g.setState({...g.state,shift:20,campaignComplete:false});g.startShift();
+
+  // Фура: левый пост, долгая заправка, двойные деньги и нос, не упирающийся в столбики.
+  clear();
+  out.truckSpawns=g.spawnBigVehicle(VEHICLES.truck);
+  const truck=g.cars.at(-1);
+  out.truckSkipsQueue=g.carQueue.length===0;
+  out.truckTakesLeftBay=truck.pump===g.pumps[2];
+  out.truckIsLong=truck.halfLength>=VEHICLES.car.halfLength*1.6;
+  out.truckParks=park(truck);
+  out.truckNoseClearsTankPad=truck.group.position.z+truck.halfLength<-3.9;
+  out.truckJobNamesIt=(g.jobs.find(j=>j.car===truck&&j.kind==='hose-pickup')?.sub||'').includes('фура');
+  out.onlyOneBigAtOnce=!g.bigVehicleReady()&&rollVehicle({truck:1,bus:1},{allowBig:false})==='car';
+  const truckRun=fuelThrough(truck);
+  out.truckTakesLonger=!!truckRun&&truckRun.duration===VEHICLES.truck.fuelTime;
+
+  // Легковая на том же уровне — мерка для денег и времени.
+  clear();
+  g.testFleet={car:1};g.shiftConfig={...g.shiftConfig,fleet:{car:1}};
+  out.carSpawns=g.spawnCar();
+  const car=g.cars.at(-1);
+  out.carQueues=g.carQueue.includes(car);
+  for(let i=0;i<600&&!car.pump;i++){g.updateCars(.05)}
+  out.carParks=park(car);
+  const carRun=fuelThrough(car);
+  out.truckPaysMore=!!carRun&&!!truckRun&&truckRun.gain>carRun.gain*1.8;
+  out.truckStandsLonger=!!carRun&&truckRun.duration>carRun.duration*1.5;
+
+  // Мотоцикл: быстрее, дешевле, в магазин не заходит.
+  clear();
+  g.shiftConfig={...g.shiftConfig,fleet:{bike:1},orderIntensity:1};
+  out.bikeSpawns=g.spawnCar();
+  const bike=g.cars.at(-1);
+  out.bikeIsSmall=bike.halfLength<VEHICLES.car.halfLength;
+  out.bikeWaitsLess=bike.patience<Math.round(g.shiftConfig.customerPatience);
+  for(let i=0;i<600&&!bike.pump;i++)g.updateCars(.05);
+  out.bikeParks=park(bike);
+  g.maybeSendCustomer(bike);
+  out.bikeSkipsShop=g.customers.length===0;
+  const bikeRun=fuelThrough(bike);
+  out.bikeIsQuick=!!bikeRun&&!!carRun&&bikeRun.duration<carRun.duration&&bikeRun.gain<carRun.gain;
+
+  // Автобус: три заказа сразу и отъезд только после последнего покупателя.
+  clear();
+  g.shiftConfig={...g.shiftConfig,orderIntensity:1,orderMenu:['coffee','snack','hotdog','soda']};
+  g.stock={coffee:5,snack:5,hotdog:5,soda:5};
+  out.busSpawns=g.spawnBigVehicle(VEHICLES.bus);
+  const bus=g.cars.at(-1);
+  out.busParks=park(bus);
+  out.busBringsThree=g.customers.filter(c=>c.car===bus).length===3;
+  out.busSeatsSpread=new Set(g.customers.map(c=>c.slot)).size===3;
+  const busRun=fuelThrough(bus);
+  out.busFueled=!!busRun&&bus.fueled===true;
+  g.releaseCar(bus);
+  out.busWaitsForItsPassengers=bus.status!=='leaving';
+  g.customers.filter(c=>c.car===bus).forEach(c=>{c.served=true;g.despawnCustomer(c)});
+  out.busLeavesWhenEmpty=bus.status==='leaving'||bus.leaveWhenReady===true||g.state.stats.busLoads>0;
+  out.fullBusCounted=g.state.stats.busLoads>0;
+
+  // Габариты в очереди: место считается по длине тех, кто уже стоит.
+  clear();
+  g.shiftConfig={...g.shiftConfig,fleet:{car:1},queueSize:3};
+  g.pumps.forEach(p=>p.car={});
+  g.spawnCar();const first=g.cars.at(-1);
+  for(let i=0;i<90;i++)g.updateCars(.05);
+  g.shiftConfig={...g.shiftConfig,fleet:{bike:1}};
+  g.spawnCar();const second=g.cars.at(-1);
+  out.bothStayInLine=g.carQueue.length===2&&second!==first;
+  const expected=queueOffsets([first.halfLength,second.halfLength],SERVICE_QUEUE.gap)[1];
+  out.queueUsesRealLengths=Math.abs(second.target.x-(SERVICE_QUEUE.headX+expected))<.001;
+  out.shortVehiclePacksCloser=second.target.x-first.target.x<first.halfLength*2+SERVICE_QUEUE.gap+.01;
+  g.pumps.forEach(p=>p.car=null);
+
+  // Без третьего поста крупные не приезжают вовсе.
+  clear();
+  g.pumps[2].closed=true;g.pumps[2].broken=true;
+  out.noBigBayNoBigClients=!g.bigVehicleReady()&&!g.spawnBigVehicle(VEHICLES.truck);
+  g.pumps[2].closed=false;g.pumps[2].broken=false;
+  clear();g.testFleet=null;
+  return out;});
+if(Object.values(vehicleTypes).some(v=>!v))throw new Error(`Vehicle types failed: ${JSON.stringify(vehicleTypes)}`);
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
@@ -751,4 +855,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue, safety, fuel flow and traffic are working.');await browser.close();

@@ -4,10 +4,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { CAMPAIGN_SHIFTS, CAMPAIGN_SHIFT_COUNT, EVENT_TYPES, PLAY_MODE, getShiftConfig } from '../src/content/shifts.js';
 import { SAVE_VERSION, migrateProgress } from '../src/content/progress.js';
+import { VEHICLE_ASSETS, VEHICLE_IDS, VEHICLES } from '../src/content/vehicles.js';
 
 const required = ['index.html', 'src/main.js', 'src/gamepush.js', 'src/content/shifts.js', 'src/content/progress.js', 'src/content/levels.js',
   'public/models/station.glb', 'public/models/second_floor.glb', 'public/models/pump.glb', 'public/models/car.glb',
-  'public/models/mystery_van.glb', 'public/models/tanker.glb', 'public/models/worker.glb', 'public/models/bag.glb', 'public/models/cleaning_kit.glb'];
+  'public/models/mystery_van.glb', 'public/models/tanker.glb', 'public/models/worker.glb', 'public/models/bag.glb', 'public/models/cleaning_kit.glb',
+  ...VEHICLE_ASSETS.map((name) => `public/models/${name}.glb`)];
 for (const file of required) {
   const path = resolve(file), stats = await stat(path);
   if (!stats.size) throw new Error(`${file} is empty`);
@@ -34,9 +36,10 @@ for (const image of images) await stat(resolve('public', image));
 /* Модели, которые грузит игра, должны лежать в public/models. */
 const modelList = sources[0].match(/files=\[([^\]]+)\]/);
 if (!modelList) throw new Error('Model list was not found in main.js');
-for (const name of modelList[1].split(',').map((part) => part.trim().replace(/'/g, ''))) {
-  await stat(resolve('public/models', `${name}.glb`));
-}
+const modelNames = modelList[1].split(',').map((part) => part.trim().replace(/'/g, ''))
+  .flatMap((name) => (name === '...VEHICLE_ASSETS' ? VEHICLE_ASSETS : [name]));
+for (const name of modelNames) await stat(resolve('public/models', `${name}.glb`));
+if (!VEHICLE_IDS.every((id) => modelNames.includes(VEHICLES[id].asset))) throw new Error('A vehicle type has no model in the load list');
 
 /* Конфиг кампании должен быть пригоден к запуску: без этого игра не стартует. */
 if (CAMPAIGN_SHIFT_COUNT !== CAMPAIGN_SHIFTS.length) throw new Error('Campaign length does not match the level table');

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 export const ROAD={center:-17,near:-14.9,far:-19.1,edge:58,y:-.05};
 export const laneFor=dir=>dir>0?ROAD.near:ROAD.far; // правостороннее движение
-export const SERVICE_QUEUE={headX:14,headZ:-12,stepX:5.3,stepZ:0};
+export const SERVICE_QUEUE={headX:14,headZ:-12,gap:1.35};
 
 const TMP=new THREE.Vector3(),NEXT=new THREE.Vector3();
 const point=([x,z])=>new THREE.Vector3(x,ROAD.y,z);
@@ -25,23 +25,25 @@ export function entryPath(slotX,slotZ,side,lane){
   ]);
 }
 
-export function queuePoint(index){
-  const slot=Math.max(0,index);
-  return new THREE.Vector3(SERVICE_QUEUE.headX+slot*SERVICE_QUEUE.stepX,ROAD.y,SERVICE_QUEUE.headZ+slot*SERVICE_QUEUE.stepZ);
+/* Точка в очереди задаётся сдвигом вдоль линии, а не номером: длину линии
+   считает игра по габаритам тех, кто уже приехал. */
+export function queuePoint(offset=0){
+  return new THREE.Vector3(SERVICE_QUEUE.headX+Math.max(0,offset),ROAD.y,SERVICE_QUEUE.headZ);
 }
 
-/* Все клиенты въезжают в одну физическую FIFO-линию на площадке перед АЗС. */
-export function queueEntryPath(index){
-  const target=queuePoint(index),lane=ROAD.far;
+/* Все клиенты въезжают в одну физическую FIFO-линию на площадке перед АЗС.
+   Съезд с трассы привязан к своему месту: хвост длинной очереди сворачивает раньше. */
+export function queueEntryPath(target){
+  const lane=ROAD.far,turn=Math.min(46,Math.max(29,target.x+11));
   return path([
-    [ROAD.edge,lane],[38,lane],[29,-18.1],[24,-15.8],
+    [ROAD.edge,lane],[turn+9,lane],[turn,-18.1],[turn-5,-15.8],
     [target.x+4.2,target.z-1.2],[target.x,target.z]
   ]);
 }
 
 /* После ухода головной машины оставшиеся автомобили подтягиваются без телепортации. */
-export function queueAdvancePath(position,index){
-  const target=queuePoint(index),midX=(position.x+target.x)/2,midZ=(position.z+target.z)/2;
+export function queueAdvancePath(position,target){
+  const midX=(position.x+target.x)/2,midZ=(position.z+target.z)/2;
   return path([[position.x,position.z],[midX,midZ],[target.x,target.z]]);
 }
 
@@ -62,16 +64,17 @@ export function queueToPumpPath(position,slotX,slotZ){
 }
 
 /* Задний ход от колонки: корма уходит в сторону, нос разворачивается к выезду. */
-export function reversePath(slotX,slotZ,side){
+export function reversePath(slotX,slotZ,side,reach=4.6){
+  const k=reach/4.6;
   return path([
-    [slotX,slotZ],[slotX+side*.6,slotZ-1.6],[slotX+side*2.2,slotZ-3],
-    [slotX+side*3.8,slotZ-3.8],[slotX+side*4.6,slotZ-3.95]
+    [slotX,slotZ],[slotX+side*.6*k,slotZ-1.6*k],[slotX+side*2.2*k,slotZ-3*k],
+    [slotX+side*3.8*k,slotZ-3.8*k],[slotX+side*reach,slotZ-3.95*k]
   ],{reverse:true});
 }
 
 /* Выезд: через площадку к дороге и дальше по своей полосе за горизонт. */
-export function exitPath(slotX,slotZ,side){
-  const away=-side,lane=laneFor(away),z=slotZ-3.95,start=slotX+side*4.6;
+export function exitPath(slotX,slotZ,side,reach=4.6){
+  const away=-side,lane=laneFor(away),z=slotZ-3.95*(reach/4.6),start=slotX+side*reach;
   return path([
     [start,z],[start+away*2,z-.15],[start+away*5,z-.7],[start+away*9,-13.4],
     [start+away*14,lane+(lane<-17?2.2:.4)],[start+away*21,lane],[start+away*36,lane],[away*ROAD.edge,lane]

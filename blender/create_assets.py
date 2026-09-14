@@ -388,6 +388,105 @@ def make_car():
     export("car")
 
 
+def make_bike():
+    """Мотоцикл с седоком: два колеса, бак и фара. Габарит вдвое меньше легковой."""
+    reset()
+    for z, radius in ((-.72, .34), (.72, .34)):
+        cyl("Wheel", (0,.34,z), radius, .16, M["black"], 12, rotation=(0,0,math.pi/2))
+        cyl("Hub", (0,.34,z), .12, .18, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    cube("Fork", (0,.72,-.6), (.07,.42,.07), M["chrome"], .02)
+    cube("BikeFrame", (0,.62,.05), (.16,.16,.78), M["charcoal"], .05)
+    cube("CarBodyTank", (0,.92,-.16), (.28,.2,.42), M["red"], .12)
+    cube("CarBodyFairing", (0,.98,-.66), (.26,.26,.12), M["red"], .08)
+    cube("Seat", (0,.95,.42), (.22,.09,.42), M["charcoal"], .06)
+    cube("Tail", (0,1.0,.86), (.17,.1,.2), M["charcoal"], .05)
+    cyl("Exhaust", (.2,.44,.66), .07, .8, M["chrome"], 8, rotation=(math.pi/2,0,0))
+    cube("Handlebar", (0,1.26,-.52), (.46,.05,.05), M["chrome"], .02)
+    cube("Headlight", (0,1.16,-.72), (.15,.13,.05), M["yellow"], .04)
+    cube("TailLight", (0,1.02,1.04), (.12,.07,.035), M["red"], .025)
+    # Седок остаётся в седле: ему в магазин не надо.
+    cyl("RiderTorso", (0,1.2,.2), .21, .5, M["blue"], 8, rotation=(.22,0,0))
+    sphere("RiderHead", (0,1.62,.06), (.17,.19,.17), M["skin"])
+    cube("RiderHelmet", (0,1.7,.06), (.19,.13,.19), M["charcoal"], .09)
+    cube("RiderVisor", (0,1.64,-.1), (.14,.06,.04), M["cyan"], .02)
+    for x in (-.3,.3):
+        cyl("RiderArm", (x,1.24,-.2), .05, .62, M["skin"], 7, rotation=(1.25,0,0))
+        cyl("RiderLeg", (x,.72,.34), .07, .5, M["charcoal"], 7, rotation=(.5,0,0))
+    export("bike")
+
+
+def make_truck():
+    """Фура: тягач с полуприцепом одним куском. Длина честная — 8 метров."""
+    reset()
+    # Рама и седельно-сцепное: по ней читается, что кабина и прицеп — одно целое.
+    cube("Chassis", (0,.72,.4), (1.02,.2,3.5), M["charcoal"], .05)
+    # Кабина.
+    cube("CarBodyCab", (0,1.72,-2.7), (1.24,.82,1.3), M["red"], .14)
+    cube("CarBodyCabRoof", (0,2.66,-2.5), (1.16,.14,1.08), M["red"], .1)
+    cube("CabSkirt", (0,.86,-2.7), (1.2,.36,1.3), M["charcoal"], .06)
+    cube("Windshield", (0,2.14,-3.94), (1.02,.52,.06), M["glass"], .025)
+    for x in (-1.2,1.2):
+        cube("CabSideWindow", (x,2.12,-2.95), (.05,.42,.62), M["glass"], .02)
+        cube("Mirror", (x*1.26,2.2,-3.7), (.06,.3,.12), M["charcoal"], .03)
+        cyl("FuelTank", (x*.96,.86,-1.2), .32, 1.3, M["chrome"], 10, rotation=(math.pi/2,0,0))
+        cube("FuelCap", (x*.96,1.2,-1.2), (.12,.06,.12), M["yellow"], .03)
+    cyl("Stack", (-1.12,2.0,-1.62), .1, 2.3, M["chrome"], 8)
+    cube("Grille", (0,1.45,-3.98), (1.0,.4,.07), M["chrome"], .04)
+    cube("FrontBumper", (0,.86,-4.02), (1.18,.26,.1), M["chrome"], .05)
+    # Полуприцеп: глухой фургон с рёбрами жёсткости.
+    cube("CarBodyTrailer", (0,2.34,1.55), (1.3,1.22,2.45), M["white"], .1)
+    cube("TrailerSkirt", (0,1.0,1.55), (1.16,.32,2.4), M["charcoal"], .05)
+    for z in (-.5,.55,1.6,2.65,3.7):
+        cube("TrailerRib", (0,2.34,z), (1.32,1.2,.05), M["chrome"], .02)
+    cube("TrailerDoor", (0,2.34,4.0), (1.2,1.16,.06), M["chrome"], .04)
+    cube("TrailerSign", (0,2.5,4.06), (.62,.3,.03), M["red"], .05)
+    for x in (-1.05,1.05):
+        for z in (-3.0,-1.35,2.6,3.5):
+            cyl("Wheel", (x,.5,z), .5, .3, M["black"], 12, rotation=(0,0,math.pi/2))
+            cyl("Hub", (x*1.02,.5,z), .17, .32, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    for x in (-.82,.82):
+        cube("Headlight", (x,1.02,-4.03), (.24,.16,.04), M["yellow"], .04)
+        cube("TailLight", (x,1.5,4.06), (.2,.14,.04), M["red"], .035)
+    for x in (-1.2,1.2):
+        cube("MarkerLight", (x,2.68,-3.9), (.1,.05,.06), M["yellow"], .02)
+    export("truck")
+
+
+def make_bus():
+    """Междугородний автобус: длинный салон, дверь и полный комплект пассажиров."""
+    reset()
+    cube("CarBodyShell", (0,1.78,0), (1.24,1.0,3.4), M["yellow"], .16)
+    cube("CarBodySkirt", (0,.78,0), (1.2,.34,3.36), M["charcoal"], .06)
+    cube("CarBodyRoofLine", (0,2.86,0), (1.12,.14,3.2), M["yellow"], .1)
+    cube("Windshield", (0,2.05,-3.34), (1.06,.62,.08), M["glass"], .03)
+    cube("RearWindow", (0,2.05,3.34), (1.06,.5,.08), M["glass"], .03)
+    # Окна салона: пассажиров видно ещё до того, как они выйдут.
+    for z in (-2.2,-1.3,-.4,.5,1.4,2.3):
+        for x in (-1.24,1.24):
+            cube("SideWindow", (x,2.15,z), (.05,.46,.36), M["glass"], .015)
+    for z in (-1.75,-.4,.95,2.3):
+        cyl("Passenger", (-.6,1.72,z), .19, .5, M["blue"], 7)
+        sphere("PassengerHead", (-.6,2.14,z), (.15,.17,.15), M["skin"])
+    # Дверь со стороны, с которой пассажиры и выходят.
+    cube("DoorPanel", (1.26,1.55,-1.95), (.05,.78,.52), M["glass"], .02)
+    cube("DoorFrame", (1.28,1.55,-1.95), (.04,.84,.58), M["charcoal"], .02)
+    cube("DoorStep", (1.24,.5,-1.95), (.12,.06,.48), M["chrome"], .02)
+    # Заправочный лючок — с той стороны, где стоит колонка.
+    cube("FuelHatch", (-1.27,1.1,1.4), (.04,.24,.3), M["chrome"], .03)
+    cube("Stripe", (0,1.12,0), (1.27,.14,3.38), M["red"], .02)
+    cube("Destination", (0,2.62,-3.36), (.78,.2,.05), M["cyan"], .03)
+    for x in (-1.06,1.06):
+        for z in (-2.45,1.85,2.85):
+            cyl("Wheel", (x,.52,z), .52, .28, M["black"], 12, rotation=(0,0,math.pi/2))
+            cyl("Hub", (x*1.02,.52,z), .17, .3, M["chrome"], 8, rotation=(0,0,math.pi/2))
+    for x in (-.86,.86):
+        cube("Headlight", (x,.95,-3.44), (.24,.16,.05), M["yellow"], .04)
+        cube("TailLight", (x,1.3,3.44), (.22,.15,.05), M["red"], .035)
+    cube("FrontBumper", (0,.72,-3.46), (1.2,.22,.1), M["chrome"], .05)
+    cube("RearBumper", (0,.72,3.46), (1.2,.22,.1), M["chrome"], .05)
+    export("bus")
+
+
 def make_van():
     reset()
     # Грузовой отсек начинается позади кабины, поэтому через стёкла видно пустые сиденья.
@@ -482,6 +581,9 @@ makers = {
     "second_floor": make_second_floor,
     "pump": make_pump,
     "car": make_car,
+    "bike": make_bike,
+    "truck": make_truck,
+    "bus": make_bus,
     "mystery_van": make_van,
     "tanker": make_tanker,
     "worker": make_worker,

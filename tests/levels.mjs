@@ -8,6 +8,7 @@ import {
 import { EVENT_TYPES, PLAY_MODE, createEndlessShift, getShiftConfig, isFinalCampaignShift } from '../src/content/shifts.js';
 import { MENU, MENU_IDS, STOCKS, MAX_STOCK, getMenuItem, shelfCount } from '../src/content/menu.js';
 import { migrateProgress, DEFAULT_PROGRESS, SAVE_VERSION, LEGACY_CAMPAIGN_LENGTH } from '../src/content/progress.js';
+import { VEHICLES, VEHICLE_IDS, getVehicle, normalizeFleet, rollVehicle, queueOffsets } from '../src/content/vehicles.js';
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -258,6 +259,68 @@ check(migrateProgress({ saveVersion: SAVE_VERSION, shift: 30, campaignComplete: 
 check(migrateProgress({ playMode: PLAY_MODE.ENDLESS, shift: 12 }).shift === 12, 'Бесконечный режим не ограничен 30 уровнями');
 check(migrateProgress({ saveVersion: 2, musicVolume: 45, sound: false }).musicVolume === 45, 'Настройки звука должны переживать миграцию');
 check(migrateProgress(DEFAULT_PROGRESS).shift === 1, 'Значения по умолчанию должны проходить миграцию без изменений');
+
+/* ─── Кто приезжает: состав потока — часть уровня, а не случайность ─── */
+const bigTypes = VEHICLE_IDS.filter((id) => VEHICLES[id].big);
+check(bigTypes.length > 0, 'Хотя бы один тип должен требовать отдельного поста');
+check(VEHICLES.bus.orders === 3, 'Автобус должен привозить три заказа');
+check(VEHICLES.bike.orders === 0, 'Мотоциклист в магазин не заходит');
+check(VEHICLES.truck.payout > VEHICLES.car.payout && VEHICLES.truck.fuelTime > VEHICLES.car.fuelTime,
+  'Фура должна платить больше легковой и стоять дольше');
+check(VEHICLES.bike.fuelTime < VEHICLES.car.fuelTime && VEHICLES.bike.patience < 1,
+  'Мотоцикл заправляется быстрее и ждёт меньше');
+VEHICLE_IDS.forEach((id) => {
+  const type = VEHICLES[id];
+  check(type.halfLength > 0 && type.halfWidth > 0, `${id}: габариты должны быть заданы`);
+  check(typeof type.asset === 'string' && type.asset.length > 0, `${id}: у типа должна быть модель`);
+});
+
+const usedTypes = new Set();
+CAMPAIGN_LEVELS.forEach((level) => {
+  const at = `Уровень ${level.number}`;
+  const fleets = [level.fleet, ...level.rushes.map((rush) => rush.fleet).filter(Boolean)];
+  fleets.forEach((fleet) => {
+    Object.entries(fleet).forEach(([id, weight]) => {
+      usedTypes.add(id);
+      check(VEHICLE_IDS.includes(id), `${at}: неизвестный тип «${id}»`);
+      check(weight > 0, `${at}: вес типа «${id}» должен быть положительным`);
+      // Крупным нужен левый пост: без него их некуда ставить и ночь встанет.
+      check(!VEHICLES[id]?.big || level.pumpsOnline >= 3, `${at}: «${id}» требует трёх постов`);
+    });
+  });
+  check(Object.keys(level.fleet).includes('car'), `${at}: легковые должны ездить всегда`);
+});
+VEHICLE_IDS.forEach((id) => check(usedTypes.has(id), `Тип «${id}» не встречается в кампании`));
+
+/* Новое появляется по одному: в первой трети кампании ездят только легковые. */
+const firstOnRoad = (id) => firstWith((level) => Boolean(level.fleet[id]));
+check(firstOnRoad('bike') === 11, `Мотоциклы должны появляться на 11-м уровне, а не на ${firstOnRoad('bike')}`);
+check(firstOnRoad('truck') === 12, `Фуры должны появляться на 12-м уровне, а не на ${firstOnRoad('truck')}`);
+check(firstOnRoad('bus') === 19, `Автобусы должны появляться на 19-м уровне, а не на ${firstOnRoad('bus')}`);
+CAMPAIGN_LEVELS.slice(0, 10).forEach((level) => {
+  check(Object.keys(level.fleet).join() === 'car', `Уровень ${level.number}: в первой главе ездят только легковые`);
+});
+check(featureTags(getLevel(12)).includes('фуры'), 'Метки уровня должны показывать, кто приедет');
+
+/* Жребий уважает веса и умеет обходиться без крупных, когда пост занят. */
+check(rollVehicle({ car: 1 }) === 'car', 'Из одного типа всегда выпадает он сам');
+check(rollVehicle({ truck: 1 }, { allowBig: false }) === 'car', 'Без свободного поста крупный не приедет');
+check(rollVehicle({ car: 1, truck: 1 }, { allowBig: false, random: () => 0.99 }) === 'car',
+  'При запрете крупных остаются только остальные');
+check(rollVehicle({ car: 1, bike: 1 }, { random: () => 0.75 }) === 'bike', 'Жребий должен учитывать веса');
+check(Object.keys(normalizeFleet({ car: 1, ufo: 5 })).join() === 'car', 'Неизвестные типы в составе игнорируются');
+check(Object.keys(normalizeFleet({})).join() === 'car', 'Пустой состав — это легковые');
+check(getVehicle('ufo') === VEHICLES.car, 'Неизвестный тип подменяется легковой');
+
+/* Место в очереди считается по габаритам: длинный сдвигает всех, кто за ним. */
+const offsets = queueOffsets([VEHICLES.car.halfLength, VEHICLES.truck.halfLength, VEHICLES.bike.halfLength], 1.35);
+check(offsets[0] === 0, 'Голова очереди стоит в начале линии');
+check(Math.abs(offsets[1] - (VEHICLES.car.halfLength + 1.35 + VEHICLES.truck.halfLength)) < 1e-9,
+  'Между соседями должен оставаться зазор и половина длины каждого');
+check(offsets[2] > offsets[1], 'Очередь должна идти в одну сторону');
+check(queueOffsets([VEHICLES.bike.halfLength, VEHICLES.bike.halfLength], 1.35)[1]
+  < queueOffsets([VEHICLES.car.halfLength, VEHICLES.car.halfLength], 1.35)[1],
+  'Мотоциклы должны стоять плотнее легковых');
 
 if (failures.length) {
   console.error(`Проверка кампании не прошла (${failures.length}):`);
