@@ -31,7 +31,7 @@ const shopAccess=await page.evaluate(()=>{const g=window.__nightStation;g.doorOp
   toFridge:clearRoute([[1.2,2.9],[2.8,3.4],[2.8,4.45]]),
   hallRoute:clearRoute([[-3,-1.9],[3,-1.9]]),
   binInHall:g.station.getObjectByName('TrashBin').position.z<0,
-  mopBehindCounter:g.kit.position.z>1.9}});
+  mopUpstairs:g.kit.position.y>3.4&&g.kit.position.x<4.36}});
 if(Object.values(shopAccess).some(v=>!v))throw new Error(`Routes behind counter are blocked: ${JSON.stringify(shopAccess)}`);
 const upperStock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
@@ -186,7 +186,7 @@ if(Object.values(handChecks).some(v=>!v))throw new Error(`Hand item checks faile
 const chores=await page.evaluate(()=>{const g=window.__nightStation;
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++){g.updateInteraction(.05)}g.actionHeld=false;g.actionLatched=false;return check()};
   const goTo=p=>{const floor=(p.y??.26)>3?3.68:.26;g.player.position.set(p.x,floor,p.z+.9);g.updateInteraction(0)};
-  const findSpot=job=>{const p=job.pos();for(let r=.35;r<=1.3;r+=.1)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return{x,z}}return null};
+  const findSpot=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.35;r<=1.3;r+=.1)for(let i=0;i<28;i++){const a=i/28*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return{x,y:floor,z}}return null};
   const out={};
   g.carry=null;g.updateCarry();
   g.spawnSpill();
@@ -195,8 +195,8 @@ const chores=await page.evaluate(()=>{const g=window.__nightStation;
   out.spillVisible=spill.visual?.children.length===5&&spill.visual.position.y>.24&&spill.visual.children.every(m=>m.visible&&m.material.opacity>.6);
   goTo(spill.pos());
   out.blockedWithoutMop=!hold(()=>!g.jobs.includes(spill),40);
-  out.mopInside=g.kit.position.z>-2.5&&g.kit.position.x>-4.3;
-  {const mopJob=g.jobs.find(j=>j.tag==='stand-mop'),mop=findSpot(mopJob);out.mopReachable=!!mop;if(mop)g.player.position.set(mop.x,.26,mop.z)}
+  out.mopInStockRoom=g.kit.position.y>3.4&&g.kit.position.z<0;
+  {const mopJob=g.jobs.find(j=>j.tag==='stand-mop'),mop=findSpot(mopJob);out.mopReachable=!!mop;if(mop)g.player.position.set(mop.x,mop.y,mop.z)}
   out.tookMop=out.mopReachable&&hold(()=>g.carry==='mop');
   out.mopLeftTheStand=g.kitMop.every(m=>!m.visible);
   goTo(spill.pos());
@@ -693,7 +693,7 @@ if(Object.values(achievementScreen).some(v=>!v))throw new Error(`Achievement scr
 const achievementUnlock=await page.evaluate(()=>{const g=window.__nightStation,out={};
   const hold=(check,max=200)=>{g.actionLatched=false;g.actionHeld=true;for(let i=0;i<max&&!check();i++)g.updateInteraction(.05);g.actionHeld=false;g.actionLatched=false;return check()};
   // Встать так, чтобы целью была именно нужная задача: пятно падает в случайное место.
-  const reach=job=>{const p=job.pos();for(let r=.5;r<=1.3;r+=.1)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z))continue;g.player.position.set(x,.26,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
+  const reach=job=>{const p=job.pos(),floor=(p.y??.26)>3?3.68:.26;for(let r=.5;r<=1.3;r+=.1)for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(g.isBlocked(x,z,null,floor))continue;g.player.position.set(x,floor,z);g.updateInteraction(0);if(g.nearest===job)return true}return false};
   g.setState({...g.state,shift:4,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
   document.querySelectorAll('.toast').forEach(t=>t.remove());

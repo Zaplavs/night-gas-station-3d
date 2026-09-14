@@ -153,12 +153,14 @@ def make_station():
     # Shop shell. The room is deep on purpose: customers now come inside, so the
     # hall in front of the counter has to hold a queue of people.
     cube("ShopFloor", (0, .12, 2.0), (4.8, .12, 4.6), M["concrete"])
-    cube("BackWall", (0, 1.65, 6.5), (4.8, 1.65, .12), M["cream"])
-    cube("LeftWall", (-4.68, 1.65, 2.0), (.12, 1.65, 4.6), M["cream"])
-    cube("RightWall", (4.68, 1.65, 2.0), (.12, 1.65, 4.6), M["cream"])
+    # The walls run up into the slab of the floor above: the old ones stopped at
+    # 3.3 and left a slot under it that you could see the whole shop through.
+    cube("BackWall", (0, 1.78, 6.5), (4.8, 1.78, .12), M["cream"])
+    cube("LeftWall", (-4.68, 1.78, 2.0), (.12, 1.78, 4.6), M["cream"])
+    cube("RightWall", (4.68, 1.78, 2.0), (.12, 1.78, 4.6), M["cream"])
     cube("Roof", (0, 3.35, 2.0), (4.95, .12, 4.75), M["darkred"])
-    cube("RedFascia", (0, 2.95, -2.55), (4.8, .38, .18), M["red"])
-    number_24("ShopSign", (0, 3.0, -2.77), .82, mirror=True)
+    cube("RedFascia", (0, 3.06, -2.55), (4.8, .49, .18), M["red"])
+    number_24("ShopSign", (0, 3.06, -2.77), .82, mirror=True)
     # Glazed storefront with a two-leaf automatic sliding entrance.
     cube("EntranceGlassLeft", (-3.0, 1.31, -2.61), (1.68, 1.2, .045), M["glass"], .025)
     cube("EntranceGlassRight", (3.0, 1.31, -2.61), (1.68, 1.2, .045), M["glass"], .025)
@@ -272,9 +274,11 @@ def make_second_floor():
     cube("UpperBackWall", (0, 4.78, 6.36), (4.58, 1.1, .12), M["cream"])
     cube("UpperLeftWall", (-4.48, 4.78, 2.0), (.12, 1.1, 4.25), M["cream"])
     # The right-hand wall has a proper doorway onto the outside landing.
-    cube("UpperRightWallFront", (4.48, 4.78, -.05), (.12, 1.1, 2.2), M["cream"])
+    # The front piece runs right up to the door frame: a narrow slot used to be
+    # left beside it, and the lit stock room showed through from the landing.
+    cube("UpperRightWallFront", (4.48, 4.78, .02), (.12, 1.1, 2.27), M["cream"])
     cube("UpperRightWallBack", (4.48, 4.78, 5.17), (.12, 1.1, 1.18), M["cream"])
-    cube("UpperDoorHeader", (4.48, 5.75, 3.15), (.14, .13, .82), M["charcoal"], .025)
+    cube("UpperDoorHeader", (4.48, 5.75, 3.15), (.14, .13, .86), M["charcoal"], .025)
     for z in (2.36, 3.94):
         cube("UpperDoorFrame", (4.58, 4.7, z), (.13, 1.05, .07), M["charcoal"], .02)
     cube("UpperDoor", (4.61, 4.68, 3.15), (.055, .96, .72), M["red"], .045)
@@ -308,6 +312,11 @@ def make_second_floor():
     cube("ToolBoard", (4.4, 5.1, 1.3), (.06, .46, .52), M["red"], .03)
     for z, size in ((.95, .06), (1.3, .09), (1.65, .05)):
         cube("ToolBoardHook", (4.32, 5.12, z), (.02, size, size), M["chrome"], .012)
+
+    # A cleaning nook on the same wall: mop and bucket live upstairs now.
+    cube("MopBoard", (4.4, 4.5, -1.4), (.06, .42, .52), M["cyan"], .03)
+    for z, size in ((-1.75, .06), (-1.4, .09), (-1.05, .05)):
+        cube("MopBoardHook", (4.32, 4.52, z), (.02, size, size), M["chrome"], .012)
 
     # Exterior stair along the right wall. Solid stepped blocks keep the mesh
     # very cheap and match the height function used by the browser controller.
