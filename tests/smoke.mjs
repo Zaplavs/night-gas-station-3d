@@ -1,12 +1,13 @@
 /* Быстрая проверка без браузера: файлы на месте, разметка совпадает с кодом.
    Содержимое кампании проверяет tests/levels.mjs. */
-import { readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { CAMPAIGN_SHIFTS, CAMPAIGN_SHIFT_COUNT, EVENT_TYPES, PLAY_MODE, getShiftConfig } from '../src/content/shifts.js';
 import { SAVE_VERSION, migrateProgress } from '../src/content/progress.js';
 import { VEHICLE_ASSETS, VEHICLE_IDS, VEHICLES } from '../src/content/vehicles.js';
+import { AD_COOLDOWN } from '../src/gamepush.js';
 
-const required = ['index.html', 'src/main.js', 'src/gamepush.js', 'src/content/shifts.js', 'src/content/progress.js', 'src/content/levels.js',
+const required = ['index.html', 'src/main.js', 'src/gamepush.js', 'scripts/pack.mjs', 'src/content/shifts.js', 'src/content/progress.js', 'src/content/levels.js',
   'public/models/station.glb', 'public/models/second_floor.glb', 'public/models/pump.glb', 'public/models/car.glb',
   'public/models/mystery_van.glb', 'public/models/tanker.glb', 'public/models/worker.glb', 'public/models/bag.glb', 'public/models/cleaning_kit.glb',
   ...VEHICLE_ASSETS.map((name) => `public/models/${name}.glb`)];
@@ -64,4 +65,36 @@ if (endless.shift !== 12 || endless.campaignComplete || getShiftConfig(endless.s
   throw new Error('Endless mode preparation failed');
 }
 
-console.log(`Smoke test passed: ${required.length} required files, ${referenced.size} interface elements and ${CAMPAIGN_SHIFT_COUNT} levels are valid.`);
+/* ─────────── Готовность к площадке ───────────
+   Требования GamePush и Пикабу Игр: название на обложке совпадает с названием игры,
+   иконка без надписей, скриншоты нужного размера, никаких внешних ссылок в разметке,
+   полноэкранная реклама не чаще чем раз в три минуты. */
+const pkg = JSON.parse(await readFile(resolve('package.json'), 'utf8'));
+if (!pkg.scripts.release?.includes('pack.mjs')) throw new Error('npm run release does not build the platform archive');
+if (AD_COOLDOWN < 180000) throw new Error('Fullscreen ads must not run more often than once every three minutes');
+const initCall = sources[0].match(/initGamePush\([\s\S]*?\}\);/)?.[0] ?? '';
+if (initCall.includes('bindAdPause')) throw new Error('Ad pause must not depend on a cloud save being present');
+if (!sources[0].split(/\r?\n/).some((line) => line.startsWith('bindAdPause('))) throw new Error('Ads do not pause the shift');
+
+const title = html.match(/<title>([^<]+)<\/title>/)?.[1]?.trim();
+if (title !== 'Ночная заправка 3D') throw new Error(`Page title does not match the game name: ${title}`);
+const menuTitle = html.match(/<h1>([\s\S]*?)<\/h1>/)?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+if (menuTitle !== 'НОЧНАЯ ЗАПРАВКА 3D') throw new Error(`Menu title does not match the game name: ${menuTitle}`);
+if (!html.includes('id="rotate"')) throw new Error('Portrait phones are not asked to rotate');
+const external = [...html.matchAll(/(?:href|src)="(https?:)?\/\/[^"]+"/g)].map((match) => match[0]);
+if (external.length) throw new Error(`index.html must not link out of the game: ${external.join(', ')}`);
+
+/* Размеры промо-материалов заданы площадкой, а пересобираются они скриптом съёмки. */
+const pngSize = async (file) => {
+  const head = (await readFile(resolve(file))).subarray(16, 24);
+  return `${head.readUInt32BE(0)}x${head.readUInt32BE(4)}`;
+};
+if (await pngSize('promo/icon-1024x1024.png') !== '1024x1024') throw new Error('Icon must be 1024x1024');
+if (await pngSize('promo/cover-1920x1080.png') !== '1920x1080') throw new Error('Cover must be 1920x1080');
+const shots = (await readdir(resolve('promo/screenshots'))).filter((name) => name.endsWith('.png'));
+if (shots.length < 4) throw new Error('At least four screenshots are required');
+for (const shot of shots) {
+  if (await pngSize(`promo/screenshots/${shot}`) !== '1280x720') throw new Error(`Screenshot ${shot} must be 1280x720`);
+}
+
+console.log(`Smoke test passed: ${required.length} required files, ${referenced.size} interface elements, ${CAMPAIGN_SHIFT_COUNT} levels and the store package are valid.`);

@@ -1135,18 +1135,50 @@ const queueTimer=await page.evaluate(()=>{
   g.jobs=g.jobs.filter(j=>j.hidden);g.testFleet=null;
   return out;});
 if(Object.values(queueTimer).some(v=>!v))throw new Error(`Queue timer failed: ${JSON.stringify(queueTimer)}`);
+// Площадка смотрит на это отдельно: уход со вкладки и рекламный ролик обязаны
+// останавливать смену и звук, а кнопка «Продолжить» — возвращать в игру.
+const storeBehaviour=await page.evaluate(async()=>{
+  const g=window.__nightStation,out={};
+  const {AD_COOLDOWN,adCooldownLeft,gameplayStart,gameplayStop,bindAdPause}=await import('/src/gamepush.js');
+  g.setState({...g.state,shift:3,campaignComplete:false});g.startShift();
+  out.playing=g.mode==='playing';
+  Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+  g.visibility();
+  out.pausesWhenHidden=g.mode==='paused';
+  out.soundStops=!g.audio?.ctx||g.audio.ctx.state!=='running';
+  Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
+  g.resume();
+  out.resumes=g.mode==='playing';
+  out.adPauseSafe=(()=>{try{bindAdPause(()=>{});return true}catch{return false}})();
+  out.adGapIsThreeMinutes=AD_COOLDOWN>=180000&&adCooldownLeft()===0;
+  out.gameplayHooksSafe=(()=>{try{gameplayStart();gameplayStop();return true}catch{return false}})();
+  out.soundToggle=!!document.querySelector('#sound-btn');
+  const before=g.state.sound;g.toggleSound();out.soundToggleWorks=g.state.sound!==before;g.toggleSound();
+  out.noExternalLinks=[...document.querySelectorAll('a[href]')].every(a=>!/^https?:/.test(a.getAttribute('href')));
+  out.titleMatchesCard=document.title==='Ночная заправка 3D';
+  g.showMenu();
+  return out;});
+if(Object.values(storeBehaviour).some(v=>!v))throw new Error(`Store readiness failed: ${JSON.stringify(storeBehaviour)}`);
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
 await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
+// Вертикальный телефон просят повернуть: смена играется только горизонтально.
+const portraitGuard=await mobile.evaluate(()=>({shown:getComputedStyle(document.querySelector('#rotate')).display!=='none',
+  covers:!!document.elementFromPoint(innerWidth/2,innerHeight/2)?.closest('#rotate')}));
+if(Object.values(portraitGuard).some(v=>!v))throw new Error(`Portrait phones must be asked to rotate: ${JSON.stringify(portraitGuard)}`);
+await mobile.screenshot({path:'artifacts/mobile-portrait.png'});
+await mobile.setViewportSize({width:844,height:390});
+if(await mobile.evaluate(()=>getComputedStyle(document.querySelector('#rotate')).display)!=='none')throw new Error('The rotate screen must disappear in landscape');
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
-const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==390)throw new Error('Mobile canvas is not responsive');
+const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==844)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});
 await mobile.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,levelsCleared:12,tutorial:true});g.openLevels('menu')});
 const mobileLevels=await mobile.evaluate(()=>{const card=document.querySelector('.levels-card'),tiles=[...document.querySelectorAll('.level-tile')];
   const box=tiles[0].getBoundingClientRect();
-  return{fits:card.getBoundingClientRect().width<=390,tileWide:box.width>=110,tappable:box.height>=44,
-    twoColumns:tiles[1].getBoundingClientRect().top===box.top&&tiles[2].getBoundingClientRect().top>box.top,
+  return{fits:card.getBoundingClientRect().width<=innerWidth,tileWide:box.width>=110,tappable:box.height>=44,
+    sideBySide:tiles[1].getBoundingClientRect().top===box.top,
+    wraps:tiles.some(tile=>tile.getBoundingClientRect().top>box.top),
     scrolls:card.scrollHeight>card.clientHeight};});
 if(Object.values(mobileLevels).some(v=>!v))throw new Error(`Level menu on phone failed: ${JSON.stringify(mobileLevels)}`);
 await mobile.screenshot({path:'artifacts/mobile-levels.png'});

@@ -67,7 +67,7 @@
   <section id="menu" class="screen hidden">
     <div class="menu-card">
       <p class="eyebrow">ТРАССА М-13 · 02:47</p>
-      <h1>НОЧНАЯ<br><em>ЗАПРАВКА</em></h1>
+      <h1>НОЧНАЯ<br><em>ЗАПРАВКА</em><i>3D</i></h1>
       <p class="lead">Обычная работа. Необычные посетители.<br>Главное — дотянуть до рассвета.</p>
       <div class="menu-actions">
         <button id="continue-btn" class="primary">ПРОДОЛЖИТЬ СМЕНУ <span>→</span></button>
@@ -185,6 +185,9 @@
       <button id="campaign-menu" class="text-btn">В главное меню</button>
     </div>
   </section>
+
+  <!-- Смена играется горизонтально: в портрете телефон просят повернуть, а не показывают сжатую сцену. -->
+  <div id="rotate" aria-hidden="true"><div><span>⟳</span><b>ПОВЕРНИТЕ ТЕЛЕФОН</b><small>Ночная смена играется горизонтально</small></div></div>
 
   <script>window.GAMEPUSH_CONFIG = { projectId: '', publicToken: '', saveField: 'night_station_save' };</script>
   <script type="module" src="/src/main.js"></script>
