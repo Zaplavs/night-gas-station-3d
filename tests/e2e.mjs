@@ -1173,15 +1173,6 @@ if(await mobile.evaluate(()=>getComputedStyle(document.querySelector('#rotate'))
 await mobile.click('#new-btn');await mobile.click('#tutorial-start');await mobile.locator('#mobile-controls:not(.hidden)').waitFor();
 const mobileCanvas=await mobile.locator('#scene').boundingBox();if(!mobileCanvas||mobileCanvas.width!==844)throw new Error('Mobile canvas is not responsive');
 await mobile.screenshot({path:'artifacts/mobile.png'});
-await mobile.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,levelsCleared:12,tutorial:true});g.openLevels('menu')});
-const mobileLevels=await mobile.evaluate(()=>{const card=document.querySelector('.levels-card'),tiles=[...document.querySelectorAll('.level-tile')];
-  const box=tiles[0].getBoundingClientRect();
-  return{fits:card.getBoundingClientRect().width<=innerWidth,tileWide:box.width>=110,tappable:box.height>=44,
-    sideBySide:tiles[1].getBoundingClientRect().top===box.top,
-    wraps:tiles.some(tile=>tile.getBoundingClientRect().top>box.top),
-    scrolls:card.scrollHeight>card.clientHeight};});
-if(Object.values(mobileLevels).some(v=>!v))throw new Error(`Level menu on phone failed: ${JSON.stringify(mobileLevels)}`);
-await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 // Телефон должен именно играться: стик везёт, свайп крутит, кнопка действия работает,
 // а долгий тап не зовёт «копировать/вставить».
 const mobilePlay=await mobile.evaluate(async()=>{
@@ -1217,6 +1208,33 @@ const mobilePlay=await mobile.evaluate(async()=>{
   out.actionButtonWorks=g.carry==='mop';
   out.actionReleases=g.actionHeld===false;
   g.carry=null;g.updateCarry();
+  // Кнопка прыжка: держим, отрываемся от земли, отпускаем — приземляемся.
+  const jump=document.querySelector('#jump-btn'),jumpBox=jump.getBoundingClientRect();
+  g.player.position.set(0,.26,-3.4);g.resetJump();g.updatePlayer(0);
+  fire(jump,'pointerdown',jumpBox.left+jumpBox.width/2,jumpBox.top+jumpBox.height/2,11);
+  out.jumpPresses=g.keys.Space===true;
+  let peak=0;for(let i=0;i<14;i++){g.updatePlayer(.05);peak=Math.max(peak,g.jumpHeight)}
+  fire(jump,'pointerup',jumpBox.left+jumpBox.width/2,jumpBox.top+jumpBox.height/2,11);
+  out.jumpLifts=peak>.4;
+  out.jumpReleases=g.keys.Space===false;
+  for(let i=0;i<80;i++)g.updatePlayer(.05);
+  out.jumpLands=g.grounded===true&&g.jumpHeight===0;
+  // Обе кнопки и стик — на экране, крупные, не наезжают друг на друга.
+  const stickBox=document.querySelector('#joystick').getBoundingClientRect();
+  const onScreen=r=>r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;
+  const apart=(a,b)=>!(a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom);
+  out.controlsOnScreen=[stickBox,jumpBox,action.getBoundingClientRect()].every(onScreen);
+  out.controlsBigEnough=jumpBox.width>=44&&action.getBoundingClientRect().width>=44;
+  out.controlsApart=apart(jumpBox,action.getBoundingClientRect())&&apart(stickBox,jumpBox);
+  // Панель дел не уезжает за нижний край и не перехватывает касания у стика.
+  g.jobs=g.jobs.filter(job=>job.hidden);
+  for(let i=0;i<6;i++)g.addJob({title:`Дело ${i+1}`,sub:'Подпись задания на две строки текста',pos:()=>g.player.position,duration:3,patience:60});
+  g.renderTasks();
+  const panel=document.querySelector('#tasks').getBoundingClientRect();
+  out.tasksFitTheScreen=panel.bottom<=innerHeight;
+  out.tasksSayWhatIsHidden=!!document.querySelector('#task-list .task.more');
+  out.stickTakesTouches=!!document.elementFromPoint(stickBox.left+stickBox.width/2,stickBox.top+6)?.closest('#joystick');
+  g.jobs=g.jobs.filter(job=>job.hidden);g.renderTasks();
   // Экраны открываются и листаются без полосы прокрутки.
   g.openStation('menu');
   const station=document.querySelector('#station-grid'),card=document.querySelector('#station .levels-card');
@@ -1228,6 +1246,15 @@ const mobilePlay=await mobile.evaluate(async()=>{
   return out;});
 if(Object.values(mobilePlay).some(v=>!v))throw new Error(`Mobile play failed: ${JSON.stringify(mobilePlay)}`);
 await mobile.screenshot({path:'artifacts/mobile-play.png'});
+await mobile.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,levelsCleared:12,tutorial:true});g.openLevels('menu')});
+const mobileLevels=await mobile.evaluate(()=>{const card=document.querySelector('.levels-card'),tiles=[...document.querySelectorAll('.level-tile')];
+  const box=tiles[0].getBoundingClientRect();
+  return{fits:card.getBoundingClientRect().width<=innerWidth,tileWide:box.width>=110,tappable:box.height>=44,
+    sideBySide:tiles[1].getBoundingClientRect().top===box.top,
+    wraps:tiles.some(tile=>tile.getBoundingClientRect().top>box.top),
+    scrolls:card.scrollHeight>card.clientHeight};});
+if(Object.values(mobileLevels).some(v=>!v))throw new Error(`Level menu on phone failed: ${JSON.stringify(mobileLevels)}`);
+await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
