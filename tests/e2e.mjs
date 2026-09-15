@@ -2,9 +2,11 @@ import { chromium } from 'playwright-core';
 import { mkdir } from 'node:fs/promises';
 const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--use-angle=swiftshader','--enable-webgl']});
 const baseUrl=process.env.TEST_URL||'http://127.0.0.1:4173';
+// Сцену проверяем на русском: язык браузера в headless — английский, а строки в тестах русские.
+const ruUrl=baseUrl+(baseUrl.includes('?')?'&':'?')+'lang=ru';
 const page=await browser.newPage({viewport:{width:1280,height:720}});const errors=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&!/favicon|fonts\.google/i.test(r.url()))errors.push(`${r.status()} ${r.url()}`)});
-await page.goto(baseUrl,{waitUntil:'domcontentloaded'});
+await page.goto(ruUrl,{waitUntil:'domcontentloaded'});
 await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
@@ -1168,10 +1170,55 @@ const storeBehaviour=await page.evaluate(async()=>{
   g.showMenu();
   return out;});
 if(Object.values(storeBehaviour).some(v=>!v))throw new Error(`Store readiness failed: ${JSON.stringify(storeBehaviour)}`);
+// Английская смена: язык берётся из адреса, словарь закрывает все экраны,
+// а кадры обучения подставляются свои.
+const english=await browser.newPage();
+const englishErrors=[];english.on('pageerror',error=>englishErrors.push(error.message));
+await english.goto(baseUrl+(baseUrl.includes('?')?'&':'?')+'lang=en',{waitUntil:'domcontentloaded'});
+await english.locator('#menu:not(.hidden)').waitFor({timeout:30000});
+const englishRun=await english.evaluate(async()=>{
+  const g=window.__nightStation,out={};
+  const {EN}=await import('/src/content/en.js');
+  const russian=node=>/[А-Яа-яЁё]/.test(node);
+  out.languageFromUrl=g.lang==='en';
+  out.titleTranslated=document.title==='Night Gas Station 3D'&&document.documentElement.lang==='en';
+  out.menuTranslated=!russian(document.querySelector('#menu').textContent);
+  g.setState({...g.state,shift:12,levelsCleared:11,campaignComplete:false,money:5000});
+  g.startShift();
+  out.hudTranslated=!russian(document.querySelector('#hud').textContent+document.querySelector('#tasks').textContent);
+  out.levelNameTranslated=document.querySelector('#level-name').textContent.includes('The third bay');
+  // Надписи на площадке рисуются на канве — проверяем исходники, из которых их пекут.
+  out.signsTranslated=g.labelSources.length>=10&&g.labelSources.every(source=>!/[А-Яа-яЁё]/.test(source.text)||EN[source.text]!==undefined);
+  g.openStation('menu');
+  out.stationTranslated=!russian(document.querySelector('#station').textContent);
+  g.closeStation();g.openLevels('menu');
+  out.levelsTranslated=!russian(document.querySelector('#levels').textContent);
+  g.closeLevels();g.openAchievements('menu');
+  out.achievementsTranslated=!russian(document.querySelector('#achievements').textContent);
+  document.querySelector('#achievements').classList.add('hidden');
+  g.setState({...g.state,shift:12});g.startShift();g.openGuide();
+  const images=[];
+  for(let i=0;i<9;i++){g.guideIndex=i;g.renderGuide();images.push(document.querySelector('#guide-image').getAttribute('src'))}
+  out.guideTranslated=!russian(document.querySelector('#guide').textContent);
+  out.guideUsesEnglishShots=images.every(src=>src.includes('tutorial/en/'));
+  g.closeGuide();
+  return out;});
+if(Object.values(englishRun).some(value=>!value))throw new Error(`English build failed: ${JSON.stringify(englishRun)}`);
+// Кадры обучения должны существовать, иначе на экране пустая рамка.
+const guideShots=await english.evaluate(async()=>{
+  const checks=await Promise.all(Array.from({length:9},(_,i)=>i).map(async index=>{
+    const name=['01-controls','02-pumps','03-shop','04-events','05-goal','06-fuel','07-stock','08-vehicles','09-station'][index];
+    const response=await fetch(`tutorial/en/${name}.png`,{method:'HEAD'});
+    return response.ok;}));
+  return checks.every(Boolean);});
+if(!guideShots)throw new Error('English tutorial screenshots are missing');
+await english.screenshot({path:'artifacts/english.png'});
+if(englishErrors.length)throw new Error(`English runtime errors: ${englishErrors.join(' | ')}`);
+await english.close();
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
-await mobile.goto(baseUrl,{waitUntil:'domcontentloaded'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
+await mobile.goto(ruUrl,{waitUntil:'domcontentloaded'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 // Вертикальный телефон просят повернуть: смена играется только горизонтально.
 const portraitGuard=await mobile.evaluate(()=>({shown:getComputedStyle(document.querySelector('#rotate')).display!=='none',
   covers:!!document.elementFromPoint(innerWidth/2,innerHeight/2)?.closest('#rotate')}));
@@ -1267,4 +1314,4 @@ await mobile.screenshot({path:'artifacts/mobile-levels.png'});
 await mobile.tap('.level-tile');
 const mobileStart=await mobile.evaluate(()=>({playing:window.__nightStation.mode==='playing',level:window.__nightStation.shiftConfig.number,controls:!document.querySelector('#mobile-controls').classList.contains('hidden')}));
 if(!mobileStart.playing||mobileStart.level!==1||!mobileStart.controls)throw new Error(`Level tap on phone failed: ${JSON.stringify(mobileStart)}`);if(mobileErrors.length)throw new Error(`Mobile runtime errors: ${mobileErrors.join(' | ')}`);await mobileContext.close();
-console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, a dawn in the last minute, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue with its own patience, safety, fuel flow and traffic are working.');await browser.close();
+console.log('E2E passed: achievements, a station bought with night money, four vehicle types, walk-in customers, a four-item shop, three bays, fuel deliveries, weather, a dawn in the last minute, hurried clients, a 30-level campaign with a level menu, goals, rushes and scripted events, two-floor stock loop, FIFO queue with its own patience, safety, fuel flow, traffic and a complete English build are working.');await browser.close();

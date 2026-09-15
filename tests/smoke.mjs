@@ -32,7 +32,10 @@ if (missing.length) throw new Error(`index.html is missing elements used by the 
 
 /* Картинки обучения подставляются из кода, их отсутствие видно только в игре. */
 const images = [...sources[0].matchAll(/'(tutorial\/[\w.-]+)'/g)].map((match) => match[1]);
-for (const image of images) await stat(resolve('public', image));
+for (const image of images) {
+  await stat(resolve('public', image));
+  await stat(resolve('public', image.replace('tutorial/', 'tutorial/en/')));
+}
 
 /* Модели, которые грузит игра, должны лежать в public/models. */
 const modelList = sources[0].match(/files=\[([^\]]+)\]/);

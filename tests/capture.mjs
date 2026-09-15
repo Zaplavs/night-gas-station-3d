@@ -1,13 +1,19 @@
 import { chromium } from 'playwright-core';
 import { mkdir } from 'node:fs/promises';
+/* Язык кадров задаётся снаружи: обучение показывается на языке игрока,
+   а промо-материалы нужны только к русской карточке. */
+const LANG=process.env.CAPTURE_LANG||'ru', RU=LANG==='ru';
+const TUTORIAL=RU?'public/tutorial/':'public/tutorial/en/';
+const BASE=process.env.CAPTURE_URL||`http://127.0.0.1:4173/?lang=${LANG}`;
+const shot=async(target,path)=>{if(path.startsWith('promo/')&&!RU)return;await target.screenshot({path})};
 const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--use-angle=swiftshader','--enable-webgl']});
-const page=await browser.newPage({viewport:{width:1920,height:1080}});await mkdir('promo/screenshots',{recursive:true});await mkdir('public/tutorial',{recursive:true});
-await page.goto('http://127.0.0.1:4173',{waitUntil:'domcontentloaded'});await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
-await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility='hidden'));await page.screenshot({path:'promo/cover-1920x1080.png'});
+const page=await browser.newPage({viewport:{width:1920,height:1080}});await mkdir('promo/screenshots',{recursive:true});await mkdir(TUTORIAL,{recursive:true});
+await page.goto(BASE,{waitUntil:'domcontentloaded'});await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
+await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility='hidden'));await shot(page,'promo/cover-1920x1080.png');
 await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility=''));
 await page.setViewportSize({width:1280,height:720});await page.click('#new-btn');await page.click('#tutorial-start');
-await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:30000});await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/01-service.png'});await page.screenshot({path:'public/tutorial/01-controls.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(.4,.26,-3.4);g.yaw=.3;g.pitch=-.06;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'public/tutorial/02-pumps.png'});
+await page.waitForFunction(()=>window.__nightStation?.cars?.some(c=>c.status==='waiting'),null,{timeout:30000});await page.waitForTimeout(400);await shot(page,'promo/screenshots/01-service.png');await shot(page,TUTORIAL+'01-controls.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(.4,.26,-3.4);g.yaw=.3;g.pitch=-.06;g.updatePlayer(0)});await page.waitForTimeout(200);await shot(page,TUTORIAL+'02-pumps.png');
 await page.evaluate(()=>{const g=window.__nightStation;
   g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
@@ -17,21 +23,21 @@ await page.evaluate(()=>{const g=window.__nightStation;
   if(guest.state==='walkingIn'){guest.state='waiting';guest.faceTowards(guest.position.x,guest.position.z+2);g.addCounterOrder(guest)}
   g.carry='coffee';g.updateCarry();g.hands.raise=1;
   g.player.position.set(.55,.26,2.6);g.yaw=.7;g.pitch=-.08;g.updatePlayer(0);g.updateInteraction(0)});
-await page.waitForTimeout(500);await page.screenshot({path:'public/tutorial/03-shop.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-5);g.yaw=Math.PI;g.pitch=-.04;g.carry='mop';g.updateCarry();g.hands.raise=1;g.eventBag();g.updatePlayer(0)});await page.waitForTimeout(500);await page.screenshot({path:'public/tutorial/04-events.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});await page.waitForTimeout(400);await page.screenshot({path:'promo/screenshots/02-forgotten-bag.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-6);g.yaw=Math.PI;g.pitch=.26;g.updatePlayer(0)});await page.waitForTimeout(200);await page.screenshot({path:'promo/screenshots/05-signage.png'});
-await page.evaluate(()=>window.__nightStation.eventBlackout());await page.waitForTimeout(500);await page.screenshot({path:'promo/screenshots/03-blackout.png'});
+await page.waitForTimeout(500);await shot(page,TUTORIAL+'03-shop.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-5);g.yaw=Math.PI;g.pitch=-.04;g.carry='mop';g.updateCarry();g.hands.raise=1;g.eventBag();g.updatePlayer(0)});await page.waitForTimeout(500);await shot(page,TUTORIAL+'04-events.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});await page.waitForTimeout(400);await shot(page,'promo/screenshots/02-forgotten-bag.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.player.position.set(0,.26,-6);g.yaw=Math.PI;g.pitch=.26;g.updatePlayer(0)});await page.waitForTimeout(200);await shot(page,'promo/screenshots/05-signage.png');
+await page.evaluate(()=>window.__nightStation.eventBlackout());await page.waitForTimeout(500);await shot(page,'promo/screenshots/03-blackout.png');
 // Рассвет: последняя минута смены, когда небо уже светлеет.
 await page.evaluate(()=>{const g=window.__nightStation;g.setBlackout(false);g.blackout=false;g.jobs=g.jobs.filter(j=>j.tag!=='blackout');
   g.setState({...g.state,shift:5,levelsCleared:4,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];
   g.elapsed=g.shiftLength-6;g.updatePlay(.05);g.served=9;g.state.money+=1200;g.updateHud();
   g.player.position.set(-1.6,.26,-8.6);g.yaw=-1.32;g.pitch=.04;g.updatePlayer(0);g.updateInteraction(0)});
-await page.waitForTimeout(700);await page.screenshot({path:'promo/screenshots/06-dawn.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();for(let i=0;i<800&&g.specialVan.status==='entering';i++)g.updateCars(.05)});await page.waitForTimeout(600);await page.screenshot({path:'promo/screenshots/04-strange-van.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:19,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.runEvent('tanker');for(let i=0;i<2600&&g.tanker&&g.tanker.status==='entering';i++)g.updateCars(.05);g.carry='tankerHose';g.updateCarry();g.hands.raise=1;g.player.position.set(-8.2,.26,-1.2);g.yaw=.66;g.pitch=-.1;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/06-fuel.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();g.served=6;g.state.money+=430;g.state.rep=3.4;g.elapsed=120;g.updateHud();g.player.position.set(.2,.26,-4.2);g.yaw=.12;g.pitch=-.02;g.updatePlayer(0)});await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/05-goal.png'});
+await page.waitForTimeout(700);await shot(page,'promo/screenshots/06-dawn.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.eventVan();for(let i=0;i<800&&g.specialVan.status==='entering';i++)g.updateCars(.05)});await page.waitForTimeout(600);await shot(page,'promo/screenshots/04-strange-van.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:19,campaignComplete:false});g.startShift();g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];g.runEvent('tanker');for(let i=0;i<2600&&g.tanker&&g.tanker.status==='entering';i++)g.updateCars(.05);g.carry='tankerHose';g.updateCarry();g.hands.raise=1;g.player.position.set(-8.2,.26,-1.2);g.yaw=.66;g.pitch=-.1;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(700);await shot(page,TUTORIAL+'06-fuel.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry();g.setState({...g.state,shift:14,campaignComplete:false});g.startShift();g.served=6;g.state.money+=430;g.state.rep=3.4;g.elapsed=120;g.updateHud();g.player.position.set(.2,.26,-4.2);g.yaw=.12;g.pitch=-.02;g.updatePlayer(0)});await page.waitForTimeout(700);await shot(page,TUTORIAL+'05-goal.png');
 await page.evaluate(async()=>{const g=window.__nightStation,{VEHICLES}=await import('/src/content/vehicles.js');
   g.carry=null;g.updateCarry();g.setState({...g.state,shift:20,campaignComplete:false});g.startShift();
   g.cars.slice().forEach(c=>g.despawn(c,g.cars));g.cars=[];g.carQueue=[];g.traffic.slice().forEach(c=>g.despawn(c,g.traffic));g.traffic=[];
@@ -41,12 +47,12 @@ await page.evaluate(async()=>{const g=window.__nightStation,{VEHICLES}=await imp
   for(let i=0;i<4000&&bike.status!=='waiting';i++)g.updateCars(.05);
   g.carry='hose';g.updateCarry();g.hands.raise=1;
   g.player.position.set(-4.0,.26,-3.5);g.yaw=.81;g.pitch=-.02;g.updatePlayer(0);g.updateInteraction(0)});
-await page.waitForTimeout(700);await page.screenshot({path:'public/tutorial/08-vehicles.png'});
-await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffeeBox';g.updateCarry();g.hands.raise=1;g.player.position.set(0,3.68,1.9);g.yaw=Math.PI;g.pitch=-.03;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(600);await page.screenshot({path:'public/tutorial/07-stock.png'});
+await page.waitForTimeout(700);await shot(page,TUTORIAL+'08-vehicles.png');
+await page.evaluate(()=>{const g=window.__nightStation;g.carry='coffeeBox';g.updateCarry();g.hands.raise=1;g.player.position.set(0,3.68,1.9);g.yaw=Math.PI;g.pitch=-.03;g.updatePlayer(0);g.updateInteraction(0)});await page.waitForTimeout(600);await shot(page,TUTORIAL+'07-stock.png');
 await page.evaluate(()=>{const g=window.__nightStation;g.carry=null;g.updateCarry()});
 // Витрина станции: часть выкуплена, часть по карману, часть ещё впереди.
 await page.evaluate(()=>{const g=window.__nightStation;g.setState({...g.state,money:3400,levelsCleared:11,shift:12,upgrades:['boots','coffeeBar']});g.openStation('menu')});
-await page.locator('#station:not(.hidden)').waitFor();await page.waitForTimeout(400);await page.screenshot({path:'public/tutorial/09-station.png'});
+await page.locator('#station:not(.hidden)').waitFor();await page.waitForTimeout(400);await shot(page,TUTORIAL+'09-station.png');
 await page.evaluate(()=>{const g=window.__nightStation;g.closeStation();g.setState({...g.state,money:0,levelsCleared:0,shift:1,upgrades:[]})});
-await page.setViewportSize({width:1024,height:1024});await page.evaluate(()=>{const g=window.__nightStation;document.querySelectorAll('body > *:not(#game)').forEach(e=>e.style.display='none');g.mode='capture';g.updateMenu=()=>{};g.scene.traverse(o=>{if(['RoadSign','ShopSign','UpgradeSign'].some(prefix=>o.name.startsWith(prefix)))o.visible=false});g.camera.fov=34;g.camera.updateProjectionMatrix();g.camera.position.set(8,6,-13);g.camera.lookAt(1.5,1,-6.8);g.renderer.render(g.scene,g.camera)});await page.waitForTimeout(300);await page.locator('#scene').screenshot({path:'promo/icon-1024x1024.png'});
-console.log('Captured icon, cover, nine tutorial screens and six gameplay screenshots.');await browser.close();
+await page.setViewportSize({width:1024,height:1024});await page.evaluate(()=>{const g=window.__nightStation;document.querySelectorAll('body > *:not(#game)').forEach(e=>e.style.display='none');g.mode='capture';g.updateMenu=()=>{};g.scene.traverse(o=>{if(['RoadSign','ShopSign','UpgradeSign'].some(prefix=>o.name.startsWith(prefix)))o.visible=false});g.camera.fov=34;g.camera.updateProjectionMatrix();g.camera.position.set(8,6,-13);g.camera.lookAt(1.5,1,-6.8);g.renderer.render(g.scene,g.camera)});await page.waitForTimeout(300);await shot(page.locator('#scene'),'promo/icon-1024x1024.png');
+console.log(RU?'Captured icon, cover, nine tutorial screens and six gameplay screenshots.':'Captured nine English tutorial screens.');await browser.close();

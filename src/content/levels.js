@@ -5,6 +5,7 @@
    нет поломок — событие не входит в allowedEvents, третий пост закрыт — pumpsOnline 2. */
 
 import { VEHICLES, normalizeFleet } from './vehicles.js';
+import { t } from './i18n.js';
 
 export const CHAPTERS = Object.freeze([
   Object.freeze({ number: 1, title: 'Первые ночи', subtitle: 'Колонка, пистолет и один клиент за раз' }),
@@ -31,35 +32,35 @@ export const HURRY_PAYOUT = 1.9;
    что от него хотят, а на итогах — что именно не получилось. */
 const GOAL_RULES = Object.freeze({
   served: {
-    label: 'Обслужено',
-    describe: (target) => `Обслужить ${target} машин`,
+    label: () => t('Обслужено'),
+    describe: (target) => t('Обслужить {n} машин', { n: target }),
     value: (stats) => stats.served,
     ok: (stats, target) => stats.served >= target,
-    fail: (stats, target) => `Обслужено ${stats.served} из ${target} машин`,
+    fail: (stats, target) => t('Обслужено {served} из {target} машин', { served: stats.served, target }),
   },
   earn: {
-    label: 'Выручка',
-    describe: (target) => `Заработать ₽${target}`,
+    label: () => t('Выручка'),
+    describe: (target) => t('Заработать ₽{n}', { n: target }),
     value: (stats) => stats.earned,
     format: (value) => `₽${Math.floor(value)}`,
     ok: (stats, target) => stats.earned >= target,
-    fail: (stats, target) => `Заработано ₽${Math.floor(stats.earned)} из ₽${target}`,
+    fail: (stats, target) => t('Заработано ₽{earned} из ₽{target}', { earned: Math.floor(stats.earned), target }),
   },
   rep: {
-    label: 'Репутация',
-    describe: (target) => `Удержать репутацию ${target.toFixed(1)}★`,
+    label: () => t('Репутация'),
+    describe: (target) => t('Удержать репутацию {n}★', { n: target.toFixed(1) }),
     value: (stats) => stats.rep,
     format: (value) => `${value.toFixed(1)}★`,
     ok: (stats, target) => stats.rep >= target - 0.001,
-    fail: (stats, target) => `Репутация ${stats.rep.toFixed(1)}★ ниже нужных ${target.toFixed(1)}★`,
+    fail: (stats, target) => t('Репутация {rep}★ ниже нужных {target}★', { rep: stats.rep.toFixed(1), target: target.toFixed(1) }),
   },
   maxLost: {
-    label: 'Потеряно',
-    describe: (target) => target === 0 ? 'Не упустить ни одного клиента' : `Упустить не больше ${target} клиентов`,
+    label: () => t('Потеряно'),
+    describe: (target) => target === 0 ? t('Не упустить ни одного клиента') : t('Упустить не больше {n} клиентов', { n: target }),
     value: (stats) => stats.lost,
     countdown: true,
     ok: (stats, target) => stats.lost <= target,
-    fail: (stats, target) => `Упущено клиентов: ${stats.lost}, допустимо ${target}`,
+    fail: (stats, target) => t('Упущено клиентов: {lost}, допустимо {target}', { lost: stats.lost, target }),
   },
 });
 
@@ -506,22 +507,22 @@ export function weatherOf(level) {
 export function featureTags(level) {
   if (!level) return [];
   const tags = [];
-  if (level.pumpsOnline >= 3) tags.push('3 поста');
-  else if (level.pumpsOnline === 1) tags.push('один пост');
-  for (const id of ['truck', 'bus', 'bike']) if (level.fleet?.[id]) tags.push(VEHICLES[id].tag);
-  if (level.weather !== 'clear') tags.push(weatherOf(level).tag);
-  if (level.hurryChance > 0) tags.push('спешат');
-  if (level.fuelReserve !== null) tags.push('бензовоз');
-  if (level.allowedEvents.includes('blackout')) tags.push('темнота');
-  else if (level.allowedEvents.includes('broken')) tags.push('поломки');
-  if (level.rushes.length > 1) tags.push(`${level.rushes.length} волны`);
-  else if (level.rushes.length === 1) tags.push('наплыв');
-  if (level.queueSize > 1) tags.push('очередь');
-  if (level.startStock.coffee + level.startStock.snack < 8) tags.push('склад');
-  if (level.orderIntensity >= 0.8) tags.push('поток заказов');
-  else if (level.orderMenu.includes('snack')) tags.push('кофе и сэндвичи');
-  else if (level.orderMenu.includes('coffee')) tags.push('кофе');
-  if (!tags.length) tags.push('основы');
+  if (level.pumpsOnline >= 3) tags.push(t('3 поста'));
+  else if (level.pumpsOnline === 1) tags.push(t('один пост'));
+  for (const id of ['truck', 'bus', 'bike']) if (level.fleet?.[id]) tags.push(t(VEHICLES[id].tag));
+  if (level.weather !== 'clear') tags.push(t(weatherOf(level).tag));
+  if (level.hurryChance > 0) tags.push(t('спешат'));
+  if (level.fuelReserve !== null) tags.push(t('бензовоз'));
+  if (level.allowedEvents.includes('blackout')) tags.push(t('темнота'));
+  else if (level.allowedEvents.includes('broken')) tags.push(t('поломки'));
+  if (level.rushes.length > 1) tags.push(t('{n} волны', { n: level.rushes.length }));
+  else if (level.rushes.length === 1) tags.push(t('наплыв'));
+  if (level.queueSize > 1) tags.push(t('очередь'));
+  if (level.startStock.coffee + level.startStock.snack < 8) tags.push(t('склад'));
+  if (level.orderIntensity >= 0.8) tags.push(t('поток заказов'));
+  else if (level.orderMenu.includes('snack')) tags.push(t('кофе и сэндвичи'));
+  else if (level.orderMenu.includes('coffee')) tags.push(t('кофе'));
+  if (!tags.length) tags.push(t('основы'));
   return tags.slice(0, 4);
 }
 
@@ -537,7 +538,7 @@ export function goalProgress(goal, stats) {
     const rule = GOAL_RULES[key], target = goal[key], value = rule.value(stats);
     return {
       key,
-      label: rule.label,
+      label: rule.label(),
       done: rule.ok(stats, target),
       text: rule.format
         ? `${rule.format(value)} / ${rule.format(target)}`

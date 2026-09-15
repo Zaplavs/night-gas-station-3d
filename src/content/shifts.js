@@ -1,4 +1,5 @@
 import { normalizeFleet } from './vehicles.js';
+import { t } from './i18n.js';
 import {
   CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT, CHAPTERS, LEVELS_PER_CHAPTER,
   WEATHER, HURRY_PATIENCE, HURRY_PAYOUT,
@@ -46,8 +47,8 @@ export function createEndlessShift(round = 1) {
   return Object.freeze({
     number,
     chapter: CHAPTERS.length,
-    name: `Бесконечная ночь ${number}`,
-    brief: 'Цели нет — работайте, пока не рассветёт, и держите репутацию.',
+    name: t('Бесконечная ночь {n}', { n: number }),
+    brief: t('Цели нет — работайте, пока не рассветёт, и держите репутацию.'),
     exam: false,
     mode: PLAY_MODE.ENDLESS,
     duration: 300,
@@ -88,7 +89,7 @@ export function createEndlessShift(round = 1) {
         interval: Object.freeze([Math.max(5, 7 - pressure * 0.2), Math.max(7.5, 9.5 - pressure * 0.25)]),
         queueBoost: 2,
         fleet: normalizeFleet({ car: 3, bike: 1.5, truck: 1.5, bus: 1 }),
-        label: 'Наплыв',
+        label: t('Наплыв'),
       }),
     ]),
   });
