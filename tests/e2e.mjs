@@ -1139,7 +1139,7 @@ if(Object.values(queueTimer).some(v=>!v))throw new Error(`Queue timer failed: ${
 // останавливать смену и звук, а кнопка «Продолжить» — возвращать в игру.
 const storeBehaviour=await page.evaluate(async()=>{
   const g=window.__nightStation,out={};
-  const {AD_COOLDOWN,adCooldownLeft,gameplayStart,gameplayStop,bindAdPause}=await import('/src/gamepush.js');
+  const {AD_COOLDOWN,adCooldownLeft,gameplayStart,gameplayStop,gameStart,bindAdPause,bindSounds,setPlatformSound,rewardedAvailable,platformLanguage}=await import('/src/gamepush.js');
   g.setState({...g.state,shift:3,campaignComplete:false});g.startShift();
   out.playing=g.mode==='playing';
   Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
@@ -1151,9 +1151,18 @@ const storeBehaviour=await page.evaluate(async()=>{
   out.resumes=g.mode==='playing';
   out.adPauseSafe=(()=>{try{bindAdPause(()=>{});return true}catch{return false}})();
   out.adGapIsThreeMinutes=AD_COOLDOWN>=180000&&adCooldownLeft()===0;
-  out.gameplayHooksSafe=(()=>{try{gameplayStart();gameplayStop();return true}catch{return false}})();
+  out.gameplayHooksSafe=(()=>{try{gameplayStart();gameplayStop();gameStart();return true}catch{return false}})();
   out.soundToggle=!!document.querySelector('#sound-btn');
-  const before=g.state.sound;g.toggleSound();out.soundToggleWorks=g.state.sound!==before;g.toggleSound();
+  const before=g.state.sound;g.toggleSound();out.soundToggleWorks=g.state.sound!==before&&document.querySelector('#sound-btn').textContent.includes(g.state.sound?'ВКЛ':'ВЫКЛ');g.toggleSound();
+  // Кнопка звука площадки глушит игру, не трогая выбор игрока.
+  g.platformMuted=true;g.applySound();
+  out.platformMuteSilences=g.state.sound===true&&g.audio.muted===true;
+  g.platformMuted=false;g.applySound();
+  out.platformUnmuteRestores=g.audio.muted===false;
+  out.platformSoundSafe=(()=>{try{setPlatformSound(true);bindSounds(()=>{});return true}catch{return false}})();
+  // Без SDK рекламы нет — и кнопки с упоминанием рекламы тоже.
+  out.rewardHiddenWithoutAds=!rewardedAvailable()&&document.querySelector('#reward-btn').classList.contains('hidden');
+  out.languageIsSafe=typeof platformLanguage()==='string';
   out.noExternalLinks=[...document.querySelectorAll('a[href]')].every(a=>!/^https?:/.test(a.getAttribute('href')));
   out.titleMatchesCard=document.title==='Ночная заправка 3D';
   g.showMenu();

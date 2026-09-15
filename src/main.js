@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { AudioSystem } from './audio.js';
-import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, gpState, bindAdPause, gameplayStart, gameplayStop } from './gamepush.js';
+import { initGamePush, loadLocal, saveProgress, showInterstitial, showRewarded, gpState, bindAdPause, bindSounds, setPlatformSound, rewardedAvailable, gameStart, gameplayStart, gameplayStop } from './gamepush.js';
 import { HandView } from './hands.js';
 import { ROAD, SERVICE_QUEUE, REVERSE_REACH, laneFor, entryPath, reversePath, exitPath, passPath, queuePoint, queueEntryPath, queueAdvancePath, queueToPumpPath, queueExitPath, addLights, drive, setPath } from './traffic.js';
 import { createSky, MOON_DIRECTION } from './sky.js';
@@ -310,7 +310,7 @@ class NightStationGame{
     $('#results-station').onclick=()=>this.openStation('results');
     ui.stationGrid.onclick=event=>{const card=event.target.closest('[data-upgrade]');if(card)this.buyUpgrade(card.dataset.upgrade)};
   }
-  setState(data){if(!data)return;this.state=migrateProgress(data);this.checkAchievements(true);this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;audio.setMuted(!this.state.sound);audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
+  setState(data){if(!data)return;this.state=migrateProgress(data);this.checkAchievements(true);this.shiftConfig=this.shiftFor(this.state.shift);this.shiftLength=this.shiftConfig.duration;this.applySound();audio.setMusicVolume(this.state.musicVolume/100);const slider=$('#music-volume');if(slider){slider.value=this.state.musicVolume;$('#music-volume-value').textContent=`${this.state.musicVolume}%`}}
   showMenu(){gameplayStop();this.mode='menu';this.dawn=0;this.applyWeather('clear');document.exitPointerLock?.();this.camera.fov=43;this.camera.updateProjectionMatrix();this.camera.position.set(12,12,-16);this.camera.lookAt(0,1,-4);if(this.player)this.player.visible=true;ui.hud.classList.add('hidden');ui.tasks.classList.add('hidden');ui.mobile.classList.add('hidden');ui.prompt.classList.add('hidden');ui.crosshair.classList.add('hidden');ui.lookHint.classList.add('hidden');ui.results.classList.add('hidden');ui.campaignComplete.classList.add('hidden');ui.menu.classList.remove('hidden');$('#continue-btn').classList.toggle('hidden',!loadLocal()&&!cloudSave);}
   prepareStart(fresh){audio.ensure();if(fresh)this.setState(DEFAULT_PROGRESS);ui.menu.classList.add('hidden');if(this.state.playMode===PLAY_MODE.CAMPAIGN&&this.state.campaignComplete){this.showCampaignComplete();return}if(this.state.playMode===PLAY_MODE.CAMPAIGN)this.state.shift=nextLevel(this.state.levelsCleared);if(!this.state.tutorial)ui.tutorial.classList.remove('hidden');else this.startShift()}
   startShift(){
@@ -1284,7 +1284,7 @@ class NightStationGame{
     }
     const upgrades=$('.upgrades');upgrades.classList.toggle('hidden',campaignDone);this.updateStationTeaser();
     const next=$('#next-shift');next.innerHTML=campaignDone?'ЗАВЕРШИТЬ КАМПАНИЮ <span>→</span>':!campaign?'СЛЕДУЮЩАЯ НОЧЬ <span>→</span>':verdict.passed?'СЛЕДУЮЩИЙ УРОВЕНЬ <span>→</span>':'ПОВТОРИТЬ УРОВЕНЬ <span>↻</span>';
-    const reward=$('#reward-btn');reward.textContent=`СМОТРЕТЬ РЕКЛАМУ: +₽${this.rewardBonus()}`;reward.classList.toggle('hidden',!gpState.available);reward.disabled=false;saveProgress(this.state)
+    const reward=$('#reward-btn');reward.textContent=`СМОТРЕТЬ РЕКЛАМУ: +₽${this.rewardBonus()}`;reward.classList.toggle('hidden',!rewardedAvailable());reward.disabled=false;saveProgress(this.state)
   }
   renderVerdict(verdict,campaign,campaignDone){
     const parts=goalProgress(this.shiftConfig.goal,{...this.goalStats(),earned:this.shiftEarned});
@@ -1304,7 +1304,9 @@ class NightStationGame{
   rewardBonus(){return Math.max(REWARD_MIN,Math.round(this.shiftEarned*REWARD_SHARE))}
   pause(){if(this.mode!=='playing')return;gameplayStop();this.mode='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');ui.mobile.classList.add('hidden');ui.lookHint.classList.add('hidden');audio.pause(true)}
   resume(){if(this.mode!=='paused')return;gameplayStart();this.mode='playing';ui.pause.classList.add('hidden');ui.mobile.classList.toggle('hidden',!isTouch);ui.crosshair.classList.remove('hidden');ui.lookHint.classList.toggle('hidden',isTouch||document.pointerLockElement===this.canvas);audio.pause(false);this.lockPointer();this.clock.getDelta()}
-  toggleSound(){this.state.sound=!this.state.sound;audio.setMuted(!this.state.sound);$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`;saveProgress(this.state)}
+  toggleSound(){this.state.sound=!this.state.sound;this.applySound();setPlatformSound(this.state.sound);saveProgress(this.state)}
+  /* Звук выключен, если его выключил игрок или площадка своей кнопкой. */
+  applySound(){audio.setMuted(!this.state.sound||this.platformMuted===true);$('#sound-btn').textContent=`ЗВУК: ${this.state.sound?'ВКЛ':'ВЫКЛ'}`}
   visibility(){if(document.hidden&&this.mode==='playing')this.pause();audio.pause(document.hidden||this.mode==='paused')}
   resize(){this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.55));this.renderer.setSize(innerWidth,innerHeight)}
   run(){const loop=()=>{requestAnimationFrame(loop);const dt=Math.min(.2,this.clock.getDelta());this.update(dt)};loop()}
@@ -1316,6 +1318,8 @@ window.__nightStation=game;
 let cloudSave=null;initGamePush(data=>{cloudSave=data;game.setState(data);$('#continue-btn').classList.remove('hidden')});
 // Реклама всегда останавливает смену и звук — сейв тут ни при чём.
 bindAdPause(v=>{audio.pause(v);if(v&&game.mode==='playing')game.pause()});
+// Кнопка звука площадки: игра замолкает вместе с ней и не трогает выбор игрока.
+bindSounds(on=>{game.platformMuted=!on;game.applySound()});
 try{
-  await game.load();game.setState(cloudSave||loadLocal()||DEFAULT_PROGRESS);audio.setMuted(!game.state.sound);setTimeout(()=>{ui.loading.classList.add('hidden');game.showMenu()},450);game.run();
+  await game.load();game.setState(cloudSave||loadLocal()||DEFAULT_PROGRESS);game.applySound();setTimeout(()=>{ui.loading.classList.add('hidden');game.showMenu();gameStart()},450);game.run();
 }catch(error){console.error(error);ui.loadText.textContent='Не удалось загрузить смену. Обновите страницу.';ui.loadText.style.color='#ff795f'}
