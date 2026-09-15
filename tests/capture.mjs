@@ -2,7 +2,7 @@ import { chromium } from 'playwright-core';
 import { mkdir } from 'node:fs/promises';
 const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--use-angle=swiftshader','--enable-webgl']});
 const page=await browser.newPage({viewport:{width:1920,height:1080}});await mkdir('promo/screenshots',{recursive:true});await mkdir('public/tutorial',{recursive:true});
-await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
+await page.goto('http://127.0.0.1:4173',{waitUntil:'domcontentloaded'});await page.locator('#menu:not(.hidden)').waitFor({timeout:15000});
 await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility='hidden'));await page.screenshot({path:'promo/cover-1920x1080.png'});
 await page.evaluate(()=>document.querySelectorAll('.menu-actions,.controls-hint,.menu-card .lead,.menu-card .eyebrow').forEach(e=>e.style.visibility=''));
 await page.setViewportSize({width:1280,height:720});await page.click('#new-btn');await page.click('#tutorial-start');

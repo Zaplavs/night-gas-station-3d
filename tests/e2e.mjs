@@ -4,7 +4,7 @@ const browser=await chromium.launch({headless:true,executablePath:'C:\\Program F
 const baseUrl=process.env.TEST_URL||'http://127.0.0.1:4173';
 const page=await browser.newPage({viewport:{width:1280,height:720}});const errors=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&!/favicon|fonts\.google/i.test(r.url()))errors.push(`${r.status()} ${r.url()}`)});
-await page.goto(baseUrl,{waitUntil:'networkidle'});
+await page.goto(baseUrl,{waitUntil:'domcontentloaded'});
 await page.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 await page.click('#new-btn');await page.locator('#tutorial:not(.hidden)').waitFor();await page.click('#tutorial-start');
 await page.locator('#hud:not(.hidden)').waitFor();
@@ -1162,7 +1162,7 @@ if(Object.values(storeBehaviour).some(v=>!v))throw new Error(`Store readiness fa
 await page.close();
 const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await mobileContext.newPage();const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
-await mobile.goto(baseUrl,{waitUntil:'networkidle'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
+await mobile.goto(baseUrl,{waitUntil:'domcontentloaded'});await mobile.locator('#menu:not(.hidden)').waitFor({timeout:30000});
 // Вертикальный телефон просят повернуть: смена играется только горизонтально.
 const portraitGuard=await mobile.evaluate(()=>({shown:getComputedStyle(document.querySelector('#rotate')).display!=='none',
   covers:!!document.elementFromPoint(innerWidth/2,innerHeight/2)?.closest('#rotate')}));
